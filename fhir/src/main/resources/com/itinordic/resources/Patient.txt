@@ -43,3 +43,24 @@ curl -XPATCH -i -u admin:district -H 'Content-Type: application/merge-patch+json
    "orgUnitLookupScript" : "http://localhost:8081/api/executableScripts/594f32de-8fb7-11e9-ac2f-cffef3106218"
 }'
 
+
+#########Patient.Rule.TransformImpScript.ScriptArg ################################################
+curl 'http://localhost:8081/api/scriptArgs/1d2171c6-9c07-11e9-aa21-6f7cb5977028' -i -u 'admin:district' -XPUT \
+    -H 'Content-Type: application/json' \
+    -d '{
+  "script" : "http://localhost:8081/api/scripts/ea887943-5e94-4e31-9441-c7661fe1063e",
+  "name" : "genderIdentityAttribute",
+  "description" : "The reference of the tracked entity attribute that contains the Gender Identity  of the Person",
+  "dataType" : "TRACKED_ENTITY_ATTRIBUTE_REF",
+  "mandatory" : true,
+  "array" : false,
+  "defaultValue" : "CODE:FHIR.Patient.extension.genderIdentity"
+}'
+
+#######Patient.Rule.TransformImpScript.ScriptSource ####################
+curl -XPUT -u admin:district -H 'Content-Type: application/json' http://localhost:8081/api/scriptSources/b2cfaf30-6ede-41f2-bd6c-448e76c429a1 -d $'{
+  "sourceText" : "function getGender(input) {\\nvar extensions = input.getExtension();\\nif (extensions !== null) {\\nfor (var i = 0; i < extensions.size(); i++) {\\nvar extension = extensions.get(i);\\nvar url = extension.getUrl();\\nvar value = extension.getValueAsPrimitive().getValueAsString();\\nif (url === \'http://hl7.org/fhir/StructureDefinition/patient-genderIdentity\') {\\nvalue = value.toLowerCase();\\nif (value === \'transgender-female\' || value === \'female\') {\\nreturn \'Female\';\\n} else if (value === \'transgender-male\' || value === \'male\') {\\nreturn \'Male\';\\n}else{\\nreturn \'\';\\n}\\n}\\n}\\n}\\nreturn \'\';\\n}\\noutput.setOptionalValue(args[\'uniqueIdCodeAttribute\'], output.getIdentifier());\\noutput.setOptionalValue(args[\'sistersNumberAttribute\'], identifierUtils.getResourceIdentifier(input, \'PATIENT\', \'urn:ceshhar:uid\'));\\noutput.setOptionalValue(args[\'genderIdentityAttribute\'], getGender(input));\\ntrue",
+  "sourceType" : "JAVASCRIPT",
+  "fhirVersions" : [ "DSTU3", "R4" ],
+  "script" : "http://localhost:8081/api/scripts/ea887943-5e94-4e31-9441-c7661fe1063e"
+}'
