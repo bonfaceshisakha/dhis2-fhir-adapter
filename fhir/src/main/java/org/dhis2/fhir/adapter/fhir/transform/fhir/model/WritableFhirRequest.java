@@ -43,7 +43,7 @@ import java.util.UUID;
 
 /**
  * The mutable request that has caused the transformation between the FHIR resource
- * and the DHIS 2 resource.
+ * and the DHIS2 resource.
  *
  * @author volsch
  */
@@ -78,6 +78,8 @@ public class WritableFhirRequest implements FhirRequest, Serializable
     private FhirVersion version;
 
     private String dhisUsername;
+
+    private UUID fhirClientId;
 
     private String fhirClientCode;
 
@@ -258,6 +260,18 @@ public class WritableFhirRequest implements FhirRequest, Serializable
     public void setFhirClientResourceId( UUID fhirClientResourceId )
     {
         this.fhirClientResourceId = fhirClientResourceId;
+    }
+
+    @Nullable
+    @Override
+    public UUID getFhirClientId()
+    {
+        return fhirClientId;
+    }
+
+    public void setFhirClientId( UUID fhirClientId )
+    {
+        this.fhirClientId = fhirClientId;
     }
 
     @Nullable

@@ -1,7 +1,7 @@
 package org.dhis2.fhir.adapter.dhis.model;
 
 /*
- * Copyright (c) 2004-2018, University of Oslo
+ * Copyright (c) 2004-2019, University of Oslo
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,10 @@ public class ImportSummary implements Serializable
 
     private ImportStatus status;
 
+    private String description;
+
+    private ImportCount importCount;
+
     private String reference;
 
     private ImportSummaries events;
@@ -74,5 +78,30 @@ public class ImportSummary implements Serializable
     public void setEvents( ImportSummaries events )
     {
         this.events = events;
+    }
+
+    public String getDescription()
+    {
+        return description;
+    }
+
+    public void setDescription( String description )
+    {
+        this.description = description;
+    }
+
+    public ImportCount getImportCount()
+    {
+        if ( importCount == null )
+        {
+            importCount = new ImportCount();
+        }
+
+        return importCount;
+    }
+
+    public void setImportCount( ImportCount importCount )
+    {
+        this.importCount = importCount;
     }
 }

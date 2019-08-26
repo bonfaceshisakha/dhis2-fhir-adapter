@@ -57,4 +57,6 @@ public interface DhisToFhirTransformerRequest extends Serializable
 
     @Nonnull
     FhirClient getFhirClient();
+
+    boolean isSimpleFhirIdRule();
 }

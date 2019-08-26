@@ -45,7 +45,7 @@ import java.util.List;
 
 /**
  * A generic search filter that prepares the URL filter values
- * of requests to DHIS 2.
+ * of requests to DHIS2.
  *
  * @author volsch
  */
@@ -99,7 +99,7 @@ public class SearchFilter
     @Nullable
     private DhisFhirResourceId getSearchedDhisResourceId( @Nonnull String fhirSearchParamName, @Nullable Object defaultFhirResourceType, @Nonnull Object dhisResourceType )
     {
-        final FhirResourceType fhirType = resolveFhirResourceType( defaultFhirResourceType );
+        final FhirResourceType fhirType = defaultFhirResourceType == null ? null : resolveFhirResourceType( defaultFhirResourceType );
         final DhisResourceType dhisType = resolveDhisResourceType( dhisResourceType );
 
         final List<SearchParamValue> searchParamValues = searchFilterCollector.getSearchParamValues( fhirSearchParamName );
@@ -123,10 +123,12 @@ public class SearchFilter
         }
 
         final DhisFhirResourceId dhisFhirResourceId = extractDhisFhirResourceId( spv.getValues().get( 0 ) );
-        if ( !dhisFhirResourceId.getType().equals( dhisType ) )
+
+        if ( dhisFhirResourceId.isQualified() && !dhisFhirResourceId.getType().equals( dhisType ) )
         {
             throw new DhisToFhirDataProviderException( "Search filter contains unexpected FHIR resource reference: " + dhisFhirResourceId );
         }
+
         return dhisFhirResourceId;
     }
 

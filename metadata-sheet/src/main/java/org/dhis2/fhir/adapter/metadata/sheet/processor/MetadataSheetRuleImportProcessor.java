@@ -45,6 +45,7 @@ import org.dhis2.fhir.adapter.fhir.metadata.model.ApplicableEventStatus;
 import org.dhis2.fhir.adapter.fhir.metadata.model.CodeCategory;
 import org.dhis2.fhir.adapter.fhir.metadata.model.CodeSet;
 import org.dhis2.fhir.adapter.fhir.metadata.model.CodeSetValue;
+import org.dhis2.fhir.adapter.fhir.metadata.model.EventPeriodDayType;
 import org.dhis2.fhir.adapter.fhir.metadata.model.EventStatusUpdate;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ExecutableScript;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ExecutableScriptArg;
@@ -106,25 +107,29 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
 
     public static final int FHIR_RESOURCE_TYPE_COL = 2;
 
-    public static final int DATA_ELEMENT_REFS_COL = 3;
+    public static final int TRANSFORM_DIR_COL = 3;
 
-    public static final int CODE_SET_CODE_COL = 4;
+    public static final int MAX_DAYS_AFTER_DUE_DATE_COL = 4;
 
-    public static final int CODE_SET_DISPLAY_NAME_COL = 5;
+    public static final int DATA_ELEMENT_REFS_COL = 5;
 
-    public static final int CODE_SET_PREFERRED_COL = 6;
+    public static final int CODE_SET_CODE_COL = 6;
 
-    public static final int CODE_SET_CODES_COL = 7;
+    public static final int CODE_SET_DISPLAY_NAME_COL = 7;
 
-    public static final int F2D_APPLICABLE_SCRIPT_CODE_COL = 13;
+    public static final int CODE_SET_PREFERRED_COL = 8;
 
-    public static final int F2D_TRANSFORM_SCRIPT_CODE_COL = 14;
+    public static final int CODE_SET_CODES_COL = 9;
 
-    public static final int D2F_APPLICABLE_SCRIPT_CODE_COL = 15;
+    public static final int F2D_APPLICABLE_SCRIPT_CODE_COL = 15;
 
-    public static final int D2F_TRANSFORM_SCRIPT_CODE_COL = 16;
+    public static final int F2D_TRANSFORM_SCRIPT_CODE_COL = 16;
 
-    public static final int VALUE_CODE_SET_CODE_COL = 8;
+    public static final int D2F_APPLICABLE_SCRIPT_CODE_COL = 17;
+
+    public static final int D2F_TRANSFORM_SCRIPT_CODE_COL = 18;
+
+    public static final int VALUE_CODE_SET_CODE_COL = 10;
 
     public static final UUID DEFAULT_OBSERVATION_SEARCH_FILTER_SCRIPT_ID = UUID.fromString( "a97e64a7-81d1-4f62-84f2-da9a003f9d0b" );
 
@@ -193,7 +198,7 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
             return messageCollector;
         }
 
-        final Program program = programMetadataService.findProgramByReference( programRef ).orElse( null );
+        final Program program = programMetadataService.findMetadataRefreshedByReference( programRef ).orElse( null );
 
         if ( program == null )
         {
@@ -213,7 +218,7 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
             return messageCollector;
         }
 
-        programStageRuleRepository.deleteAllByProgram( mappedTrackerProgram );
+        programStageRuleRepository.deleteAllNonGroupingByProgram( mappedTrackerProgram );
 
         final Set<ProgramStageDataElementKey> unprocessedKeys = new HashSet<>();
         program.getStages().forEach( ps -> ps.getDataElements().forEach( de -> unprocessedKeys.add( new ProgramStageDataElementKey( ps, de.getElement() ) ) ) );
@@ -234,6 +239,8 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                 final Reference programStageRef = getReference( getString( row, PROGRAM_STAGE_REF_COL ) );
                 final String dhisResourceTypeValue = getString( row, DHIS_RESOURCE_TYPE_COL );
                 final String fhirResourceTypeValue = getString( row, FHIR_RESOURCE_TYPE_COL );
+                final String transformDirValue = getString( row, TRANSFORM_DIR_COL );
+                final String maxDaysAfterDueDateValue = getString( row, MAX_DAYS_AFTER_DUE_DATE_COL );
                 final Set<Reference> dataElementRefs = getAllReferences( getString( row, DATA_ELEMENT_REFS_COL ) );
                 final String f2dApplicableScriptCode = getString( row, F2D_APPLICABLE_SCRIPT_CODE_COL );
                 final String f2dTransformScriptCode = getString( row, F2D_TRANSFORM_SCRIPT_CODE_COL );
@@ -247,6 +254,8 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                 Boolean codeSetPreferred = getBoolean( sheet, rowNum, CODE_SET_PREFERRED_COL );
                 List<String> codeSetCodes = getStringList( getString( row, CODE_SET_CODES_COL ) );
 
+                RuleTransformationDirection transformDir = null;
+                Integer maxDaysAfterDueDate = null;
                 DataElement mainDataElement = null;
                 DhisResourceType dhisResourceType = null;
                 FhirResourceType fhirResourceType = null;
@@ -333,6 +342,47 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                         messageCollector.addMessage( new MetadataSheetMessage(
                             MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, FHIR_RESOURCE_TYPE_COL ),
                             "FHIR resource type is invalid: " + fhirResourceTypeValue ) );
+                    }
+                }
+
+                if ( transformDirValue == null )
+                {
+                    messageCollector.addMessage( new MetadataSheetMessage(
+                        MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, TRANSFORM_DIR_COL ),
+                        "Transformation direction is invalid." ) );
+                }
+                else
+                {
+                    try
+                    {
+                        transformDir = NameUtils.toEnumValue( RuleTransformationDirection.class, transformDirValue );
+                    }
+                    catch ( IllegalArgumentException e )
+                    {
+                        messageCollector.addMessage( new MetadataSheetMessage(
+                            MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, TRANSFORM_DIR_COL ),
+                            "Transformation direction is invalid: " + transformDirValue ) );
+                    }
+                }
+
+                if ( maxDaysAfterDueDateValue != null )
+                {
+                    try
+                    {
+                        maxDaysAfterDueDate = Integer.parseInt( maxDaysAfterDueDateValue );
+                    }
+                    catch ( IllegalArgumentException e )
+                    {
+                        messageCollector.addMessage( new MetadataSheetMessage(
+                            MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, MAX_DAYS_AFTER_DUE_DATE_COL ),
+                            "Maximum days after event due date is invalid: " + maxDaysAfterDueDateValue ) );
+                    }
+
+                    if ( maxDaysAfterDueDate != null && maxDaysAfterDueDate < 0 )
+                    {
+                        messageCollector.addMessage( new MetadataSheetMessage(
+                            MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, MAX_DAYS_AFTER_DUE_DATE_COL ),
+                            "Maximum days after event due date is invalid: " + maxDaysAfterDueDateValue ) );
                     }
                 }
 
@@ -445,24 +495,6 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                     }
                 }
 
-                if ( valueCodeSetCode != null )
-                {
-                    valueCodeSet = codeSetRepository.findOneByCode( StringUtils.left( valueCodeSetCode, CodeSet.MAX_CODE_LENGTH ) ).orElse( null );
-
-                    if ( valueCodeSet == null )
-                    {
-                        messageCollector.addMessage( new MetadataSheetMessage(
-                            MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, D2F_APPLICABLE_SCRIPT_CODE_COL ),
-                            "Value code set does not exist: " + valueCodeSetCode ) );
-                    }
-                }
-                else if ( !dataElements.isEmpty() && dataElements.stream().findFirst().get().getElement().isOptionSetValue() )
-                {
-                    messageCollector.addMessage( new MetadataSheetMessage(
-                        MetadataSheetMessageSeverity.WARN, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, VALUE_CODE_SET_CODE_COL ),
-                        "Value code set code should be specified since data element reference an option set." ) );
-                }
-
                 if ( f2dApplicableScriptCode != null && mainDataElement != null )
                 {
                     f2dApplicableScript = lookupExecutableScript( messageCollector, rowNum, mainDataElement, f2dApplicableScriptCode, valueCodeSetCode );
@@ -483,7 +515,7 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                     {
                         messageCollector.addMessage( new MetadataSheetMessage(
                             MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, F2D_APPLICABLE_SCRIPT_CODE_COL ),
-                            "FHIR to DHIS 2 transform script does not exist: " + f2dApplicableScriptCode ) );
+                            "FHIR to DHIS2 transform script does not exist: " + f2dApplicableScriptCode ) );
                     }
                 }
 
@@ -507,16 +539,34 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                     {
                         messageCollector.addMessage( new MetadataSheetMessage(
                             MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, D2F_APPLICABLE_SCRIPT_CODE_COL ),
-                            "FHIR to DHIS 2 transform script does not exist: " + d2fApplicableScriptCode ) );
+                            "FHIR to DHIS2 transform script does not exist: " + d2fApplicableScriptCode ) );
                     }
+                }
+
+                if ( valueCodeSetCode != null )
+                {
+                    valueCodeSet = codeSetRepository.findOneByCode( StringUtils.left( valueCodeSetCode, CodeSet.MAX_CODE_LENGTH ) ).orElse( null );
+
+                    if ( valueCodeSet == null )
+                    {
+                        messageCollector.addMessage( new MetadataSheetMessage(
+                            MetadataSheetMessageSeverity.ERROR, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, D2F_APPLICABLE_SCRIPT_CODE_COL ),
+                            "Value code set does not exist: " + valueCodeSetCode ) );
+                    }
+                }
+                else if ( !dataElements.isEmpty() && dataElements.stream().findFirst().get().getElement().isOptionSetValue() && ( f2dTransformScript != null || d2fTransformScript != null ) )
+                {
+                    messageCollector.addMessage( new MetadataSheetMessage(
+                        MetadataSheetMessageSeverity.WARN, new MetadataSheetLocation( RULES_SHEET_NAME, rowNum, VALUE_CODE_SET_CODE_COL ),
+                        "Value code set code should be specified since data element reference an option set." ) );
                 }
 
                 if ( messageCollector.isOk() )
                 {
                     if ( newCodeSetCode )
                     {
-                        codeSet = createCodeSet( messageCollector, rowNum,
-                            codeSetCode, Objects.requireNonNull( codeSetDisplayName ), codeSetPreferred, Objects.requireNonNull( codeSetCodes ) );
+                        codeSet = createCodeSet( messageCollector, rowNum, codeSetCode, Objects.requireNonNull( codeSetDisplayName ),
+                            Objects.requireNonNull( codeSetPreferred ), Objects.requireNonNull( codeSetCodes ) );
 
                         if ( codeSet != null )
                         {
@@ -543,8 +593,8 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                     rule.setEventCreationEnabled( true );
                     rule.setContainedAllowed( false );
                     rule.setEnabled( true );
-                    rule.setImpEnabled( true );
-                    rule.setExpEnabled( true );
+                    rule.setImpEnabled( transformDir == RuleTransformationDirection.WRITE || transformDir == RuleTransformationDirection.BOTH );
+                    rule.setExpEnabled( transformDir == RuleTransformationDirection.READ || transformDir == RuleTransformationDirection.BOTH );
                     rule.setFhirCreateEnabled( true );
                     rule.setFhirUpdateEnabled( true );
                     rule.setFhirDeleteEnabled( true );
@@ -559,6 +609,12 @@ public class MetadataSheetRuleImportProcessor extends AbstractMetadataSheetImpor
                     rule.setApplicableEnrollmentStatus( new ApplicableEnrollmentStatus() );
                     rule.setApplicableEventStatus( new ApplicableEventStatus() );
                     rule.setEventStatusUpdate( new EventStatusUpdate() );
+
+                    if ( maxDaysAfterDueDate != null )
+                    {
+                        rule.setAfterPeriodDayType( EventPeriodDayType.DUE_DATE );
+                        rule.setAfterPeriodDays( maxDaysAfterDueDate );
+                    }
 
                     switch ( Objects.requireNonNull( fhirResourceType ) )
                     {

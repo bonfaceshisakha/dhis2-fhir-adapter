@@ -45,7 +45,9 @@ import org.dhis2.fhir.adapter.fhir.metadata.model.FhirClientResource;
 import org.dhis2.fhir.adapter.fhir.metadata.model.RuleInfo;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ScriptVariable;
 import org.dhis2.fhir.adapter.fhir.metadata.model.TrackedEntityRule;
+import org.dhis2.fhir.adapter.fhir.model.FhirVersion;
 import org.dhis2.fhir.adapter.fhir.repository.DhisFhirResourceId;
+import org.dhis2.fhir.adapter.fhir.script.ScriptExecutionContext;
 import org.dhis2.fhir.adapter.fhir.script.ScriptExecutor;
 import org.dhis2.fhir.adapter.fhir.transform.FatalTransformerException;
 import org.dhis2.fhir.adapter.fhir.transform.TransformerException;
@@ -68,6 +70,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Component
 public class FhirToTrackedEntityTransformer extends AbstractFhirToDhisTransformer<TrackedEntityInstance, TrackedEntityRule>
@@ -76,16 +79,28 @@ public class FhirToTrackedEntityTransformer extends AbstractFhirToDhisTransforme
 
     private final TrackedEntityMetadataService trackedEntityMetadataService;
 
+    private final ScriptExecutionContext scriptExecutionContext;
+
     private final ValueConverter valueConverter;
 
     public FhirToTrackedEntityTransformer( @Nonnull ScriptExecutor scriptExecutor, @Nonnull LockManager lockManager,
         @Nonnull TrackedEntityMetadataService trackedEntityMetadataService, @Nonnull TrackedEntityService trackedEntityService,
-        @Nonnull OrganizationUnitService organizationUnitService, @Nonnull FhirDhisAssignmentRepository fhirDhisAssignmentRepository, @Nonnull ValueConverter valueConverter )
+        @Nonnull OrganizationUnitService organizationUnitService, @Nonnull FhirDhisAssignmentRepository fhirDhisAssignmentRepository,
+        @Nonnull ScriptExecutionContext scriptExecutionContext, @Nonnull ValueConverter valueConverter )
     {
-        super( scriptExecutor, organizationUnitService, new StaticObjectProvider<>( trackedEntityService ), fhirDhisAssignmentRepository );
+        super( scriptExecutor, organizationUnitService, new StaticObjectProvider<>( trackedEntityMetadataService ), new StaticObjectProvider<>( trackedEntityService ), fhirDhisAssignmentRepository, scriptExecutionContext, valueConverter );
+
         this.lockManager = lockManager;
         this.trackedEntityMetadataService = trackedEntityMetadataService;
+        this.scriptExecutionContext = scriptExecutionContext;
         this.valueConverter = valueConverter;
+    }
+
+    @Nonnull
+    @Override
+    public Set<FhirVersion> getFhirVersions()
+    {
+        return FhirVersion.ALL;
     }
 
     @Nonnull
@@ -134,7 +149,7 @@ public class FhirToTrackedEntityTransformer extends AbstractFhirToDhisTransforme
         }
 
         final WritableScriptedTrackedEntityInstance scriptedTrackedEntityInstance = new WritableScriptedTrackedEntityInstance(
-            trackedEntityAttributes, trackedEntityType, trackedEntityInstance, valueConverter );
+            trackedEntityAttributes, trackedEntityType, trackedEntityInstance, scriptExecutionContext, valueConverter );
         variables.put( ScriptVariable.OUTPUT.getVariableName(), scriptedTrackedEntityInstance );
 
         final Optional<OrganizationUnit> organizationUnit;
@@ -170,7 +185,7 @@ public class FhirToTrackedEntityTransformer extends AbstractFhirToDhisTransforme
             Collections.singletonMap( RequiredValueType.ORG_UNIT_CODE, organizationUnit.get().getCode() ) );
         scriptedTrackedEntityInstance.validate();
 
-        return new FhirToDhisTransformOutcome<>( ruleInfo.getRule(), trackedEntityInstance );
+        return new FhirToDhisTransformOutcome<>( ruleInfo.getRule(), trackedEntityInstance, trackedEntityInstance.isNewResource() );
     }
 
     @Nullable

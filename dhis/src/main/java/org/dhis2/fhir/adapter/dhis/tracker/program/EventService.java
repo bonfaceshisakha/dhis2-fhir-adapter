@@ -28,18 +28,15 @@ package org.dhis2.fhir.adapter.dhis.tracker.program;
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-import org.dhis2.fhir.adapter.data.model.ProcessedItemInfo;
-import org.dhis2.fhir.adapter.dhis.metadata.model.DhisSyncGroup;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceResult;
 import org.dhis2.fhir.adapter.dhis.model.UriFilterApplier;
+import org.dhis2.fhir.adapter.dhis.service.DhisPolledService;
+import org.dhis2.fhir.adapter.dhis.service.DhisService;
 
 import javax.annotation.Nonnull;
-import java.time.Instant;
+import javax.annotation.Nullable;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.function.Consumer;
 
 /**
  * Service to create, update and read DHIS2 Program Stage Instances (aka events)
@@ -47,15 +44,15 @@ import java.util.function.Consumer;
  *
  * @author volsch
  */
-public interface EventService
+public interface EventService extends DhisService<Event>, DhisPolledService<Event>
 {
     @Nonnull
-    List<Event> findRefreshed( @Nonnull String programId, @Nonnull String programStageId,
-        @Nonnull String enrollmentId, @Nonnull String trackedEntityInstanceId );
+    Collection<Event> findRefreshed( @Nonnull String programId, @Nonnull String programStageId,
+        @Nonnull String enrollmentId, @Nonnull String trackedEntityInstanceId, boolean localOnly );
 
     @Nonnull
-    List<Event> find( @Nonnull String programId, @Nonnull String programStageId,
-        @Nonnull String enrollmentId, @Nonnull String trackedEntityInstanceId );
+    Collection<Event> find( @Nonnull String programId, @Nonnull String programStageId,
+        @Nonnull String enrollmentId, @Nonnull String trackedEntityInstanceId, boolean localOnly );
 
     @Nonnull
     Optional<Event> findOneById( @Nonnull String eventId );
@@ -69,9 +66,5 @@ public interface EventService
     boolean delete( @Nonnull String eventId );
 
     @Nonnull
-    DhisResourceResult<Event> find( @Nonnull String programId, @Nonnull String programStageId, @Nonnull UriFilterApplier uriFilterApplier, int from, int max );
-
-    @Nonnull
-    Instant poll( @Nonnull DhisSyncGroup group, @Nonnull Instant lastUpdated, int toleranceMillis,
-        int maxSearchCount, @Nonnull Set<String> excludedStoredBy, @Nonnull Consumer<Collection<ProcessedItemInfo>> consumer );
+    DhisResourceResult<Event> find( @Nullable String programId, @Nullable String programStageId, @Nonnull UriFilterApplier uriFilterApplier, int from, int max );
 }

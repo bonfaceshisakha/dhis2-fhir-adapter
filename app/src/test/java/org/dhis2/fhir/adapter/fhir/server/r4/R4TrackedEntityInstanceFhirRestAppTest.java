@@ -56,7 +56,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 /**
  * R4 tests for rest interfaces that access
- * DHIS 2 tracked entity instances. <b>Some methods are executed twice in order to
+ * DHIS2 tracked entity instances. <b>Some methods are executed twice in order to
  * verify that no cached data is used without authentication.</b>
  *
  * @author volsch
@@ -74,7 +74,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
     public void getPatientWithoutAuthorization()
     {
         final IGenericClient client = createGenericClient();
-        client.read().resource( Patient.class ).withId( "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" ).execute();
+        client.read().resource( Patient.class ).withId( "JeR2Ul4mZfx" ).execute();
     }
 
     @Test( expected = AuthenticationException.class )
@@ -88,7 +88,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "invalid_1" ) );
-        client.read().resource( Patient.class ).withId( "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" ).execute();
+        client.read().resource( Patient.class ).withId( "JeR2Ul4mZfx" ).execute();
     }
 
     @Test
@@ -114,12 +114,12 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "fhir_client_1" ) );
-        Patient patient = client.read().resource( Patient.class ).withId( "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" ).execute();
+        Patient patient = client.read().resource( Patient.class ).withId( "JeR2Ul4mZfx" ).execute();
         Assert.assertEquals( "West", patient.getNameFirstRep().getFamily() );
         Assert.assertEquals( 1, patient.getIdentifier().size() );
         Assert.assertEquals( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier", patient.getIdentifier().get( 0 ).getSystem() );
         Assert.assertEquals( "PT_81589", patient.getIdentifier().get( 0 ).getValue() );
-        Assert.assertEquals( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352", patient.getManagingOrganization().getReference() );
+        Assert.assertEquals( "Organization/ldXIdLNUNEn", patient.getManagingOrganization().getReference() );
 
         systemDhis2Server.verify();
         userDhis2Server.verify();
@@ -138,7 +138,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
     {
         expectTrackedEntityMetadataRequests();
         userDhis2Server.expect( ExpectedCount.once(), method( HttpMethod.GET ) ).andExpect( header( "Authorization", "Basic Zmhpcl9jbGllbnQ6aW52YWxpZF8x" ) )
-            .andExpect( requestTo( dhis2BaseUrl + "/api/" + dhis2ApiVersion + "/trackedEntityInstances.json?trackedEntityType=MCPQUTHX1Ze&ouMode=ACCESSIBLE&filter=Ewi7FUfcHAD:EQ:OU_1234&pageSize=1" +
+            .andExpect( requestTo( dhis2BaseUrl + "/api/" + dhis2ApiVersion + "/trackedEntityInstances.json?trackedEntityType=MCPQUTHX1Ze&ouMode=ACCESSIBLE&filter=jD1NGmSntCt:EQ:OU_1234&pageSize=1" +
                 "&fields=deleted,trackedEntityInstance,trackedEntityType,orgUnit,coordinates,lastUpdated,attributes%5Battribute,value,lastUpdated,storedBy%5D" ) )
             .andRespond( withStatus( HttpStatus.UNAUTHORIZED ) );
 
@@ -161,7 +161,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
 
         expectTrackedEntityMetadataRequests();
         userDhis2Server.expect( ExpectedCount.once(), method( HttpMethod.GET ) ).andExpect( header( "Authorization", "Basic Zmhpcl9jbGllbnQ6Zmhpcl9jbGllbnRfMQ==" ) )
-            .andExpect( requestTo( dhis2BaseUrl + "/api/" + dhis2ApiVersion + "/trackedEntityInstances.json?trackedEntityType=MCPQUTHX1Ze&ouMode=ACCESSIBLE&filter=Ewi7FUfcHAD:EQ:OU_1234&pageSize=1" +
+            .andExpect( requestTo( dhis2BaseUrl + "/api/" + dhis2ApiVersion + "/trackedEntityInstances.json?trackedEntityType=MCPQUTHX1Ze&ouMode=ACCESSIBLE&filter=jD1NGmSntCt:EQ:OU_1234&pageSize=1" +
                 "&fields=deleted,trackedEntityInstance,trackedEntityType,orgUnit,coordinates,lastUpdated,attributes%5Battribute,value,lastUpdated,storedBy%5D" ) )
             .andRespond( withSuccess( IOUtils.resourceToString( "/org/dhis2/fhir/adapter/dhis/test/default-tei-15-get.json", StandardCharsets.UTF_8 ), MediaType.APPLICATION_JSON ) );
         userDhis2Server.expect( ExpectedCount.between( 0, 1 ), method( HttpMethod.GET ) ).andExpect( header( "Authorization", "Basic Zmhpcl9jbGllbnQ6Zmhpcl9jbGllbnRfMQ==" ) )
@@ -177,7 +177,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         Assert.assertEquals( 1, patient.getIdentifier().size() );
         Assert.assertEquals( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier", patient.getIdentifier().get( 0 ).getSystem() );
         Assert.assertEquals( "PT_81589", patient.getIdentifier().get( 0 ).getValue() );
-        Assert.assertEquals( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352", patient.getManagingOrganization().getReference() );
+        Assert.assertEquals( "Organization/ldXIdLNUNEn", patient.getManagingOrganization().getReference() );
 
         systemDhis2Server.verify();
         userDhis2Server.verify();
@@ -235,7 +235,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         Assert.assertEquals( 1, patient.getIdentifier().size() );
         Assert.assertEquals( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier", patient.getIdentifier().get( 0 ).getSystem() );
         Assert.assertEquals( "PT_81589", patient.getIdentifier().get( 0 ).getValue() );
-        Assert.assertEquals( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352", patient.getManagingOrganization().getReference() );
+        Assert.assertEquals( "Organization/ldXIdLNUNEn", patient.getManagingOrganization().getReference() );
 
         systemDhis2Server.verify();
         userDhis2Server.verify();
@@ -255,14 +255,14 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "fhir_client_1" ) );
-        Bundle bundle = client.search().forResource( Patient.class ).where( Patient.ORGANIZATION.hasId( new IdType( "Organization", "ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) ) ).returnBundle( Bundle.class ).execute();
+        Bundle bundle = client.search().forResource( Patient.class ).where( Patient.ORGANIZATION.hasId( new IdType( "Organization", "ldXIdLNUNEn" ) ) ).returnBundle( Bundle.class ).execute();
         Assert.assertEquals( 2, bundle.getEntry().size() );
         Patient patient = (Patient) bundle.getEntry().get( 0 ).getResource();
         Assert.assertEquals( "West", patient.getNameFirstRep().getFamily() );
         Assert.assertEquals( 1, patient.getIdentifier().size() );
         Assert.assertEquals( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier", patient.getIdentifier().get( 0 ).getSystem() );
         Assert.assertEquals( "PT_81589", patient.getIdentifier().get( 0 ).getValue() );
-        Assert.assertEquals( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352", patient.getManagingOrganization().getReference() );
+        Assert.assertEquals( "Organization/ldXIdLNUNEn", patient.getManagingOrganization().getReference() );
 
         systemDhis2Server.verify();
         userDhis2Server.verify();
@@ -289,7 +289,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         Assert.assertEquals( 1, patient.getIdentifier().size() );
         Assert.assertEquals( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier", patient.getIdentifier().get( 0 ).getSystem() );
         Assert.assertEquals( "PT_81589", patient.getIdentifier().get( 0 ).getValue() );
-        Assert.assertEquals( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352", patient.getManagingOrganization().getReference() );
+        Assert.assertEquals( "Organization/ldXIdLNUNEn", patient.getManagingOrganization().getReference() );
 
         systemDhis2Server.verify();
         userDhis2Server.verify();
@@ -304,7 +304,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
             IOUtils.resourceToString( "/org/dhis2/fhir/adapter/fhir/test/" + getResourceDir() + "/get-patient-15.json", StandardCharsets.UTF_8 ) );
         patient.getIdentifierFirstRep().setSystem( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier" ).setValue( "PT_88589" );
         patient.setId( (IdType) null );
-        patient.setManagingOrganization( new Reference( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) );
+        patient.setManagingOrganization( new Reference( "Organization/ldXIdLNUNEn" ) );
 
         final IGenericClient client = createGenericClient();
         client.create().resource( patient ).execute();
@@ -323,7 +323,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
             IOUtils.resourceToString( "/org/dhis2/fhir/adapter/fhir/test/" + getResourceDir() + "/get-patient-15.json", StandardCharsets.UTF_8 ) );
         patient.getIdentifierFirstRep().setSystem( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier" ).setValue( "PT_88589" );
         patient.setId( (IdType) null );
-        patient.setManagingOrganization( new Reference( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) );
+        patient.setManagingOrganization( new Reference( "Organization/ldXIdLNUNEn" ) );
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "invalid_1" ) );
@@ -344,13 +344,13 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
             IOUtils.resourceToString( "/org/dhis2/fhir/adapter/fhir/test/" + getResourceDir() + "/get-patient-15.json", StandardCharsets.UTF_8 ) );
         patient.getIdentifierFirstRep().setSystem( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier" ).setValue( "PT_88589" );
         patient.setId( (IdType) null );
-        patient.setManagingOrganization( new Reference( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) );
+        patient.setManagingOrganization( new Reference( "Organization/ldXIdLNUNEn" ) );
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "fhir_client_1" ) );
         MethodOutcome methodOutcome = client.create().resource( patient ).execute();
         Assert.assertEquals( Boolean.TRUE, methodOutcome.getCreated() );
-        Assert.assertEquals( "http://localhost:" + localPort + "/fhir/r4/default/Patient/te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35", methodOutcome.getId().toString() );
+        Assert.assertEquals( "http://localhost:" + localPort + "/fhir/r4/default/Patient/JeR2Ul4mZfx", methodOutcome.getId().toString() );
     }
 
     @Test( expected = AuthenticationException.class )
@@ -361,8 +361,8 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         Patient patient = (Patient) getFhirContext().newJsonParser().parseResource(
             IOUtils.resourceToString( "/org/dhis2/fhir/adapter/fhir/test/" + getResourceDir() + "/get-patient-15.json", StandardCharsets.UTF_8 ) );
         patient.getIdentifierFirstRep().setSystem( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier" ).setValue( "PT_88589" );
-        patient.setId( "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" );
-        patient.setManagingOrganization( new Reference( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) );
+        patient.setId( "JeR2Ul4mZfx" );
+        patient.setManagingOrganization( new Reference( "Organization/ldXIdLNUNEn" ) );
         patient.getNameFirstRep().setGiven( new ArrayList<>() );
         patient.getNameFirstRep().addGiven( "Joe" ).addGiven( "Scott" );
 
@@ -382,8 +382,8 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         Patient patient = (Patient) getFhirContext().newJsonParser().parseResource(
             IOUtils.resourceToString( "/org/dhis2/fhir/adapter/fhir/test/" + getResourceDir() + "/get-patient-15.json", StandardCharsets.UTF_8 ) );
         patient.getIdentifierFirstRep().setSystem( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier" ).setValue( "PT_88589" );
-        patient.setId( "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" );
-        patient.setManagingOrganization( new Reference( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) );
+        patient.setId( "JeR2Ul4mZfx" );
+        patient.setManagingOrganization( new Reference( "Organization/ldXIdLNUNEn" ) );
         patient.getNameFirstRep().setGiven( new ArrayList<>() );
         patient.getNameFirstRep().addGiven( "Joe" ).addGiven( "Scott" );
 
@@ -410,8 +410,8 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         Patient patient = (Patient) getFhirContext().newJsonParser().parseResource(
             IOUtils.resourceToString( "/org/dhis2/fhir/adapter/fhir/test/" + getResourceDir() + "/get-patient-15.json", StandardCharsets.UTF_8 ) );
         patient.getIdentifierFirstRep().setSystem( "http://www.dhis2.org/dhis2fhiradapter/systems/patient-identifier" ).setValue( "PT_88589" );
-        patient.setId( "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" );
-        patient.setManagingOrganization( new Reference( "Organization/ou-ldXIdLNUNEn-d0e1472a05e647c9b36bff1f06fec352" ) );
+        patient.setId( "JeR2Ul4mZfx" );
+        patient.setManagingOrganization( new Reference( "Organization/ldXIdLNUNEn" ) );
         patient.getNameFirstRep().setGiven( new ArrayList<>() );
         patient.getNameFirstRep().addGiven( "Joe" ).addGiven( "Scott" );
 
@@ -419,7 +419,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "fhir_client_1" ) );
         MethodOutcome methodOutcome = client.update().resource( patient ).execute();
         Assert.assertNotEquals( Boolean.TRUE, methodOutcome.getCreated() );
-        Assert.assertEquals( "http://localhost:" + localPort + "/fhir/r4/default/Patient/te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35", methodOutcome.getId().toString() );
+        Assert.assertEquals( "http://localhost:" + localPort + "/fhir/r4/default/Patient/JeR2Ul4mZfx", methodOutcome.getId().toString() );
     }
 
     @Test( expected = AuthenticationException.class )
@@ -428,7 +428,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
         expectTrackedEntityMetadataRequests();
 
         final IGenericClient client = createGenericClient();
-        client.delete().resourceById( "Patient", "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" ).execute();
+        client.delete().resourceById( "Patient", "JeR2Ul4mZfx" ).execute();
     }
 
     @Test( expected = AuthenticationException.class )
@@ -441,7 +441,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "invalid_1" ) );
-        client.delete().resourceById( "Patient", "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" ).execute();
+        client.delete().resourceById( "Patient", "JeR2Ul4mZfx" ).execute();
 
         userDhis2Server.verify();
     }
@@ -456,7 +456,7 @@ public class R4TrackedEntityInstanceFhirRestAppTest extends AbstractTrackedEntit
 
         final IGenericClient client = createGenericClient();
         client.registerInterceptor( new BasicAuthInterceptor( "fhir_client", "fhir_client_1" ) );
-        client.delete().resourceById( "Patient", "te-JeR2Ul4mZfx-5f9ebdc9852e4c8387ca795946aabc35" ).execute();
+        client.delete().resourceById( "Patient", "JeR2Ul4mZfx" ).execute();
 
         userDhis2Server.verify();
     }

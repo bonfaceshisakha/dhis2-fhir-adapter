@@ -168,27 +168,48 @@ public class DhisRepositoryImpl implements DhisRepository
     @Nonnull
     public Optional<IBaseResource> read( @Nonnull FhirClient fhirClient, @Nonnull FhirResourceType fhirResourceType, @Nonnull DhisFhirResourceId dhisFhirResourceId )
     {
+        final DhisResourceType dhisResourceType;
+        final UUID ruleId;
+
+        if ( dhisFhirResourceId.isQualified() )
+        {
+            dhisResourceType = dhisFhirResourceId.getType();
+            ruleId = dhisFhirResourceId.getRuleId();
+        }
+        else
+        {
+            final RuleInfo<? extends AbstractRule> ruleInfo = dhisToFhirTransformerService.findSingleRule( fhirClient, fhirResourceType );
+
+            if ( ruleInfo == null || !ruleInfo.getRule().isSimpleFhirId() )
+            {
+                return Optional.empty();
+            }
+
+            dhisResourceType = ruleInfo.getRule().getDhisResourceType();
+            ruleId = ruleInfo.getRule().getId();
+        }
+
         return new OneDhisResourceReader()
         {
             @Nonnull
             @Override
             protected UUID getRuleId()
             {
-                return dhisFhirResourceId.getRuleId();
+                return ruleId;
             }
 
             @Nullable
             @Override
             protected DhisToFhirTransformerRequest createTransformerRequest( @Nonnull FhirResourceType fhirResourceType, @Nonnull DhisRequest dhisRequest, @Nonnull DhisResource dhisResource )
             {
-                return dhisToFhirTransformerService.createTransformerRequest( fhirClient, dhisRequest, dhisResource, fhirResourceType, dhisFhirResourceId.getRuleId() );
+                return dhisToFhirTransformerService.createTransformerRequest( fhirClient, dhisRequest, dhisResource, fhirResourceType, ruleId );
             }
 
             @Nullable
             @Override
             protected DhisResource getDhisResource()
             {
-                return dhisResourceRepository.findRefreshed( dhisFhirResourceId.getDhisResourceId() ).orElse( null );
+                return dhisResourceRepository.findRefreshed( dhisFhirResourceId.toQualified( dhisResourceType, ruleId ).getDhisResourceId() ).orElse( null );
             }
         }.read( fhirClient, fhirResourceType );
     }
@@ -199,10 +220,12 @@ public class DhisRepositoryImpl implements DhisRepository
     public Optional<IBaseResource> readByIdentifier( @Nonnull FhirClient fhirClient, @Nonnull FhirResourceType fhirResourceType, @Nonnull String identifier )
     {
         final RuleInfo<? extends AbstractRule> ruleInfo = dhisToFhirTransformerService.findSingleRule( fhirClient, fhirResourceType );
+
         if ( ruleInfo == null )
         {
             return Optional.empty();
         }
+
         return new OneDhisResourceReader()
         {
             @Nonnull
@@ -223,20 +246,26 @@ public class DhisRepositoryImpl implements DhisRepository
             @Override
             protected DhisResource getDhisResource()
             {
-                return dhisToFhirTransformerService.getDataProvider( ruleInfo.getRule().getDhisResourceType() )
+                return dhisToFhirTransformerService.getDataProvider( fhirClient.getFhirVersion(), ruleInfo.getRule().getDhisResourceType() )
                     .findByDhisFhirIdentifierCasted( fhirClient, ruleInfo, identifier );
             }
         }.read( fhirClient, fhirResourceType );
     }
 
-    @HystrixCommand( ignoreExceptions = { MissingDhisResourceException.class, TransformerDataException.class, TransformerMappingException.class, DhisToFhirDataProviderException.class, UnauthorizedException.class, ForbiddenException.class } )
+    @HystrixCommand( ignoreExceptions = { MissingDhisResourceException.class, TransformerDataException.class, TransformerMappingException.class, DhisToFhirDataProviderException.class, UnauthorizedException.class, ForbiddenException.class,
+        DhisToFhirDataProviderException.class } )
     @Nonnull
     @Override
-    public IBundleProvider search( @Nonnull FhirClient fhirClient, @Nonnull FhirResourceType fhirResourceType, Integer count, @Nullable Set<SystemCodeValue> filteredCodes,
-        @Nullable Map<String, List<String>> filter, @Nullable DateRangeParam lastUpdatedDateRange ) throws DhisToFhirDataProviderException
+    public IBundleProvider search( @Nonnull FhirClient fhirClient, @Nonnull FhirResourceType fhirResourceType, @Nullable Integer count, boolean unlimitedCount,
+        @Nullable Set<SystemCodeValue> filteredCodes, @Nullable Map<String, List<String>> filter, @Nullable DateRangeParam lastUpdatedDateRange ) throws DhisToFhirDataProviderException
     {
         final int resultingCount;
-        if ( count == null )
+
+        if ( unlimitedCount )
+        {
+            resultingCount = Integer.MAX_VALUE;
+        }
+        else if ( count == null )
         {
             resultingCount = fhirRestInterfaceConfig.getDefaultSearchCount();
         }
@@ -276,7 +305,7 @@ public class DhisRepositoryImpl implements DhisRepository
             return Collections.emptyList();
         }
 
-        final DhisToFhirDataProvider<? extends AbstractRule> dataProvider = dhisToFhirTransformerService.getDataProvider( dhisResourceType );
+        final DhisToFhirDataProvider<? extends AbstractRule> dataProvider = dhisToFhirTransformerService.getDataProvider( fhirClient.getFhirVersion(), dhisResourceType );
         final PreparedDhisToFhirSearch preparedSearch = dataProvider.prepareSearchCasted( fhirClient.getFhirVersion(), rules, filter, lastUpdatedDateRange, count );
 
         final LinkedList<DhisResource> dhisResources = new LinkedList<>();
@@ -423,7 +452,8 @@ public class DhisRepositoryImpl implements DhisRepository
                         }
                         else
                         {
-                            final IBaseResource resultingResource = fhirResourceRepository.save( transformerRequest.getFhirClient(), outcome.getResource() );
+                            final IBaseResource resultingResource = fhirResourceRepository
+                                .save( transformerRequest.getFhirClient(), outcome.getResource(), resource.getId() );
                             // resource may have been set as attribute in transformer context (e.g. shared encounter)
                             outcome.getResource().setId( resultingResource.getIdElement() );
                             fhirDhisAssignmentRepository.saveFhirResourceId( outcome.getRule(), transformerRequest.getFhirClient(),
@@ -450,9 +480,11 @@ public class DhisRepositoryImpl implements DhisRepository
             try ( final RequestCacheContext requestCacheContext = requestCacheService.createRequestCacheContext( true ) )
             {
                 final DhisResource dhisResource = getDhisResource();
+
                 if ( dhisResource == null )
                 {
                     logger.debug( "DHIS resource could not be found." );
+
                     return Optional.empty();
                 }
 
@@ -464,6 +496,7 @@ public class DhisRepositoryImpl implements DhisRepository
                 if ( transformerRequest == null )
                 {
                     logger.debug( "No matching rule has been found." );
+
                     return Optional.empty();
                 }
 
@@ -474,8 +507,7 @@ public class DhisRepositoryImpl implements DhisRepository
                     dhisRequest.setCompleteTransformation( matchingRule );
                     dhisRequest.setIncludeReferences( matchingRule );
 
-                    final DhisToFhirTransformOutcome<? extends IBaseResource> outcome =
-                        dhisToFhirTransformerService.transform( transformerRequest );
+                    final DhisToFhirTransformOutcome<? extends IBaseResource> outcome = dhisToFhirTransformerService.transform( transformerRequest );
                     if ( outcome == null )
                     {
                         transformerRequest = null;

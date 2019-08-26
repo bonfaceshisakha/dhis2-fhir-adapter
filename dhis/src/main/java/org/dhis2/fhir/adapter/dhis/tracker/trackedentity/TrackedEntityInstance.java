@@ -43,12 +43,20 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
 
+/**
+ * Representation of a DHIS2 tracked entity instance resource.
+ *
+ * @author volsch
+ */
 public class TrackedEntityInstance implements DhisResource, Serializable
 {
     private static final long serialVersionUID = -1707916238115298513L;
 
     @JsonIgnore
     private boolean newResource;
+
+    @JsonIgnore
+    private boolean local;
 
     @JsonProperty( access = JsonProperty.Access.WRITE_ONLY )
     private boolean deleted;
@@ -57,7 +65,7 @@ public class TrackedEntityInstance implements DhisResource, Serializable
     @JsonInclude( JsonInclude.Include.NON_NULL )
     private String id;
 
-    @JsonProperty
+    @JsonProperty( access = JsonProperty.Access.WRITE_ONLY )
     @JsonInclude( JsonInclude.Include.NON_NULL )
     private ZonedDateTime lastUpdated;
 
@@ -92,9 +100,11 @@ public class TrackedEntityInstance implements DhisResource, Serializable
         this.typeId = type.getId();
         this.id = id;
         this.newResource = newResource;
+        this.local = newResource;
         this.modified = newResource;
 
         this.attributes = new ArrayList<>();
+
         if ( newResource )
         {
             for ( final TrackedEntityTypeAttribute typeAttribute : type.getAttributes() )
@@ -138,9 +148,31 @@ public class TrackedEntityInstance implements DhisResource, Serializable
 
     public void setNewResource( boolean newResource )
     {
-
         this.newResource = newResource;
         this.modified = true;
+    }
+
+    @Override
+    public void resetNewResource()
+    {
+        this.newResource = false;
+        this.modified = false;
+
+        if ( lastUpdated == null )
+        {
+            lastUpdated = ZonedDateTime.now();
+        }
+    }
+
+    @Override
+    public boolean isLocal()
+    {
+        return local;
+    }
+
+    public void setLocal( boolean local )
+    {
+        this.local = local;
     }
 
     public boolean isDeleted()
@@ -216,6 +248,11 @@ public class TrackedEntityInstance implements DhisResource, Serializable
     public boolean containsAttribute( @Nonnull String attributeId )
     {
         return getAttributes().stream().anyMatch( a -> Objects.equals( attributeId, a.getAttributeId() ) );
+    }
+
+    public boolean containsAttribute( @Nonnull String attributeId, @Nonnull String value )
+    {
+        return getAttributes().stream().anyMatch( a -> Objects.equals( attributeId, a.getAttributeId() ) && a.getValue() != null && Objects.equals( String.valueOf( a.getValue() ), value ) );
     }
 
     public boolean containsAttributeWithValue( @Nonnull String attributeId )

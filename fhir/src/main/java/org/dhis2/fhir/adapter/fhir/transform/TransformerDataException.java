@@ -1,7 +1,7 @@
 package org.dhis2.fhir.adapter.fhir.transform;
 
 /*
- * Copyright (c) 2004-2018, University of Oslo
+ * Copyright (c) 2004-2019, University of Oslo
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,6 +28,11 @@ package org.dhis2.fhir.adapter.fhir.transform;
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * Thrown to indicate that the data that should be transformed is invalid.
+ *
+ * @author volsch
+ */
 public class TransformerDataException extends TransformerException
 {
     private static final long serialVersionUID = -5352698669381493151L;

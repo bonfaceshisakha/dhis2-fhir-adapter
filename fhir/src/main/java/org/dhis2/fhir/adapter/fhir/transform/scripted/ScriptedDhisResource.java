@@ -38,7 +38,7 @@ import javax.annotation.Nullable;
 import java.time.ZonedDateTime;
 
 /**
- * Mutable or immutable DHIS 2 resource that can be used by scripts safely.
+ * Mutable or immutable DHIS2 resource that can be used by scripts safely.
  *
  * @author volsch
  */
@@ -55,6 +55,12 @@ public interface ScriptedDhisResource
     DhisResourceId getResourceId();
 
     boolean isNewResource();
+
+    /**
+     * @return if the resource has not yet been persisted on DHIS2 and exists
+     * non-persisted on adapter side only.
+     */
+    boolean isLocal();
 
     boolean isDeleted();
 

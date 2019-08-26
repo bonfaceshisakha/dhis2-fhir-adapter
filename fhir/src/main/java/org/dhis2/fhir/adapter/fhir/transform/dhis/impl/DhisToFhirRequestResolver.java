@@ -41,8 +41,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Resolves the rules for transformations from DHIS 2 resources to FHIR resources
- * depending on the DHIS 2 resource type.
+ * Resolves the rules for transformations from DHIS2 resources to FHIR resources
+ * depending on the DHIS2 resource type.
  *
  * @author volsch
  */
@@ -58,7 +58,7 @@ public interface DhisToFhirRequestResolver
     List<RuleInfo<? extends AbstractRule>> resolveRules( @Nonnull ScriptedDhisResource dhisResource );
 
     @Nonnull
-    List<RuleInfo<? extends AbstractRule>> resolveRules( @Nonnull ScriptedDhisResource dhisResource, @Nonnull List<RuleInfo<? extends AbstractRule>> rules );
+    List<RuleInfo<? extends AbstractRule>> filterRules( @Nonnull ScriptedDhisResource dhisResource, @Nonnull List<RuleInfo<? extends AbstractRule>> rules );
 
     @Nonnull
     Optional<FhirClient> resolveFhirClient( @Nonnull ScriptedDhisResource scriptedDhisResource );

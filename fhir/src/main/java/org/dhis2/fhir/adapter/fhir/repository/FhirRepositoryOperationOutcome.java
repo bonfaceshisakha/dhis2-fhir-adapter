@@ -42,14 +42,22 @@ public class FhirRepositoryOperationOutcome implements Serializable
 
     private final String id;
 
-    public FhirRepositoryOperationOutcome( @Nonnull String id )
+    private final boolean created;
+
+    public FhirRepositoryOperationOutcome( @Nonnull String id, boolean created )
     {
         this.id = id;
+        this.created = created;
     }
 
     @Nonnull
     public String getId()
     {
         return id;
+    }
+
+    public boolean isCreated()
+    {
+        return created;
     }
 }

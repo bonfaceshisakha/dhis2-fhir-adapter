@@ -28,6 +28,7 @@ package org.dhis2.fhir.adapter.fhir.transform.dhis.impl;
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+import ca.uhn.fhir.model.primitive.IdDt;
 import org.dhis2.fhir.adapter.cache.RequestCacheContext;
 import org.dhis2.fhir.adapter.cache.RequestCacheService;
 import org.dhis2.fhir.adapter.dhis.model.DhisResource;
@@ -49,6 +50,7 @@ import org.dhis2.fhir.adapter.fhir.metadata.repository.RuleRepository;
 import org.dhis2.fhir.adapter.fhir.model.FhirVersion;
 import org.dhis2.fhir.adapter.fhir.model.FhirVersionedValue;
 import org.dhis2.fhir.adapter.fhir.model.SystemCodeValue;
+import org.dhis2.fhir.adapter.fhir.script.ScriptExecutionContext;
 import org.dhis2.fhir.adapter.fhir.script.ScriptExecutor;
 import org.dhis2.fhir.adapter.fhir.transform.FatalTransformerException;
 import org.dhis2.fhir.adapter.fhir.transform.TransformerDataException;
@@ -92,6 +94,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -126,13 +130,15 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
 
     private final Map<DhisResourceType, DhisToFhirRequestResolver> requestResolvers = new HashMap<>();
 
-    private final Map<DhisResourceType, DhisToFhirDataProvider<? extends AbstractRule>> dataProviders = new HashMap<>();
+    private final Map<FhirVersion, Map<DhisResourceType, DhisToFhirDataProvider<? extends AbstractRule>>> dataProviders = new HashMap<>();
 
-    private final Map<FhirVersionedValue<DhisResourceType>, DhisToFhirTransformer<?, ?>> transformers = new HashMap<>();
+    private final Map<FhirVersionedValue<DhisResourceType>, SortedSet<DhisToFhirTransformer<?, ?>>> transformers = new HashMap<>();
 
     private final Map<FhirVersion, Map<String, DhisToFhirTransformerUtils>> transformerUtils = new HashMap<>();
 
     private final ScriptExecutor scriptExecutor;
+
+    private final ScriptExecutionContext scriptExecutionContext;
 
     public DhisToFhirTransformerServiceImpl( @Nonnull LockManager lockManager,
         @Nonnull FhirClientResourceRepository fhirClientResourceRepository,
@@ -144,7 +150,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         @Nonnull ObjectProvider<List<DhisToFhirDataProvider<? extends AbstractRule>>> dataProviders,
         @Nonnull ObjectProvider<List<DhisToFhirTransformer<?, ?>>> transformersProvider,
         @Nonnull ObjectProvider<List<DhisToFhirTransformerUtils>> transformUtilsProvider,
-        @Nonnull ScriptExecutor scriptExecutor )
+        @Nonnull ScriptExecutor scriptExecutor, @Nonnull ScriptExecutionContext scriptExecutionContext )
     {
         this.lockManager = lockManager;
         this.fhirClientResourceRepository = fhirClientResourceRepository;
@@ -153,21 +159,34 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         this.ruleRepository = ruleRepository;
         this.requestCacheService = requestCacheService;
         this.scriptExecutor = scriptExecutor;
+        this.scriptExecutionContext = scriptExecutionContext;
 
-        requestResolvers.ifAvailable( resolvers ->
-            resolvers.forEach( r -> this.requestResolvers.put( r.getDhisResourceType(), r ) ) );
+        requestResolvers.ifAvailable( resolvers -> resolvers.forEach( r -> this.requestResolvers.put( r.getDhisResourceType(), r ) ) );
+
         dataProviders.ifAvailable( providers ->
-            providers.forEach( dp -> this.dataProviders.put( dp.getDhisResourceType(), dp ) ) );
+        {
+            for ( final DhisToFhirDataProvider<?> dataProvider : providers )
+            {
+                for ( final FhirVersion fhirVersion : dataProvider.getFhirVersions() )
+                {
+                    this.dataProviders.computeIfAbsent( fhirVersion, key -> new HashMap<>() ).put( dataProvider.getDhisResourceType(), dataProvider );
+                }
+            }
+        } );
+
         transformersProvider.ifAvailable( transformers ->
         {
             for ( final DhisToFhirTransformer<?, ?> transformer : transformers )
             {
                 for ( final FhirVersion fhirVersion : transformer.getFhirVersions() )
                 {
-                    this.transformers.put( new FhirVersionedValue<>( fhirVersion, transformer.getDhisResourceType() ), transformer );
+                    final FhirVersionedValue<DhisResourceType> fhirVersionedValue = new FhirVersionedValue<>( fhirVersion, transformer.getDhisResourceType() );
+                    this.transformers.computeIfAbsent( new FhirVersionedValue<>( fhirVersion, transformer.getDhisResourceType() ),
+                        fvv -> new TreeSet<>( Collections.reverseOrder() ) ).add( transformer );
                 }
             }
         } );
+
         transformUtilsProvider.ifAvailable( dhisToFhirTransformerUtils ->
         {
             for ( final DhisToFhirTransformerUtils tu : dhisToFhirTransformerUtils )
@@ -182,13 +201,16 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
 
     @Nonnull
     @Override
-    public DhisToFhirDataProvider<? extends AbstractRule> getDataProvider( @Nonnull DhisResourceType dhisResourceType )
+    public DhisToFhirDataProvider<? extends AbstractRule> getDataProvider( @Nonnull FhirVersion fhirVersion, @Nonnull DhisResourceType dhisResourceType )
     {
-        final DhisToFhirDataProvider<? extends AbstractRule> dataProvider = dataProviders.get( dhisResourceType );
+        final DhisToFhirDataProvider<? extends AbstractRule> dataProvider =
+            dataProviders.computeIfAbsent( fhirVersion, version -> new HashMap<>() ).get( dhisResourceType );
+
         if ( dataProvider == null )
         {
-            throw new TransformerMappingException( "No data provider can be found for DHIS resource type " + dhisResourceType );
+            throw new TransformerMappingException( "No data provider can be found for FHIR version " + fhirVersion + " and DHIS resource type " + dhisResourceType );
         }
+
         return dataProvider;
     }
 
@@ -204,37 +226,65 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
     public List<IBaseReference> resolveFhirReferences( @Nonnull FhirClient fhirClient, @Nonnull ScriptedDhisResource dhisResource, @Nullable Set<FhirResourceType> fhirResourceTypes, int max )
     {
         final WritableDhisRequest dhisRequest = new WritableDhisRequest( true, false, false );
-        dhisRequest.setLastUpdated( dhisResource.getLastUpdated() );
         dhisRequest.setResourceType( dhisResource.getResourceType() );
 
         DhisToFhirTransformerRequest transformerRequest = createTransformerRequest(
             fhirClient, new ImmutableDhisRequest( dhisRequest ), dhisResource, fhirResourceTypes );
+
         if ( transformerRequest == null )
         {
             logger.debug( "No matching rule has been found for FHIR references." );
             return Collections.emptyList();
         }
 
-        final AbstractFhirResourceDhisToFhirTransformerUtils fhirResourceTransformerUtils = getFhirResourceTransformerUtils( fhirClient.getFhirVersion() );
         final List<IBaseReference> references = new ArrayList<>();
-        do
+
+        if ( transformerRequest.isSimpleFhirIdRule() )
         {
-            final DhisToFhirTransformOutcome<? extends IBaseResource> outcome = transform( transformerRequest );
-            if ( outcome == null )
-            {
-                transformerRequest = null;
-            }
-            else
-            {
-                if ( outcome.getResource() != null )
-                {
-                    references.add( fhirResourceTransformerUtils.createReference( outcome.getResource() ) );
-                }
-                transformerRequest = outcome.getNextTransformerRequest();
-            }
+            references.add( resolveSimpleFhirIdReference( transformerRequest ) );
         }
-        while ( (transformerRequest != null) && (references.size() < max) );
+        else
+        {
+            // retrieving last updated may initialize resource event if not required for simple FHIR ID
+            dhisRequest.setLastUpdated( dhisResource.getLastUpdated() );
+            final AbstractFhirResourceDhisToFhirTransformerUtils fhirResourceTransformerUtils = getFhirResourceTransformerUtils( fhirClient.getFhirVersion() );
+
+            do
+            {
+                final DhisToFhirTransformOutcome<? extends IBaseResource> outcome = transform( transformerRequest );
+
+                if ( outcome == null )
+                {
+                    transformerRequest = null;
+                }
+                else
+                {
+                    if ( outcome.getResource() != null )
+                    {
+                        references.add( fhirResourceTransformerUtils.createReference( outcome.getResource() ) );
+                    }
+
+                    transformerRequest = outcome.getNextTransformerRequest();
+                }
+            }
+            while ( transformerRequest != null && references.size() < max );
+        }
+
         return references;
+    }
+
+    @Nonnull
+    protected IBaseReference resolveSimpleFhirIdReference( @Nonnull DhisToFhirTransformerRequest transformerRequest )
+    {
+        final AbstractFhirResourceDhisToFhirTransformerUtils fhirResourceTransformerUtils = getFhirResourceTransformerUtils( transformerRequest.getContext().getFhirVersion() );
+        final DhisToFhirTransformerRequestImpl transformerRequestImpl = (DhisToFhirTransformerRequestImpl) transformerRequest;
+        final RuleInfo<? extends AbstractRule> ruleInfo = Objects.requireNonNull( transformerRequestImpl.nextRule() );
+
+        final FhirResourceType fhirResourceType = ruleInfo.getRule().getFhirResourceType();
+        final IBaseResource resource = fhirResourceTransformerUtils.createResource( fhirResourceType );
+        resource.setId( new IdDt( fhirResourceType.getResourceTypeName(), transformerRequestImpl.getInput().getId() ) );
+
+        return fhirResourceTransformerUtils.createReference( resource );
     }
 
     @Nullable
@@ -258,6 +308,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         final DhisToFhirRequestResolver requestResolver = getRequestResolver( dhisRequest.getResourceType() );
         final ScriptedDhisResource scriptedResource =
             requestResolver.convert( Objects.requireNonNull( DhisBeanTransformerUtils.clone( resource ) ), dhisRequest );
+
         return createTransformerRequest( false, fhirClient, dhisRequest, scriptedResource, Collections.singletonList( ruleInfo ) );
     }
 
@@ -266,8 +317,9 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
     public DhisToFhirTransformerRequest createTransformerRequest( @Nonnull FhirClient fhirClient, @Nonnull DhisRequest dhisRequest, @Nonnull DhisResource resource, @Nonnull List<RuleInfo<? extends AbstractRule>> rules )
     {
         final DhisToFhirRequestResolver requestResolver = getRequestResolver( dhisRequest.getResourceType() );
-        return createTransformerRequest( dhisRequest, rr -> rr.convert( resource, dhisRequest ), requestResolver, ( rr, scriptedResource ) -> rr.resolveRules( scriptedResource, rules ),
-            ri -> true, ( si, rr ) -> fhirClient );
+
+        return createTransformerRequest( dhisRequest, rr -> rr.convert( resource, dhisRequest ), requestResolver,
+            ( rr, scriptedResource ) -> rr.filterRules( scriptedResource, rules ), ri -> true, ( si, rr ) -> fhirClient );
     }
 
     @Nullable
@@ -283,6 +335,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         @Nonnull Predicate<RuleInfo<? extends AbstractRule>> ruleInfoPredicate, @Nonnull BiFunction<ScriptedDhisResource, DhisToFhirRequestResolver, FhirClient> fhirClientFunction )
     {
         final DhisToFhirRequestResolver requestResolver = getRequestResolver( dhisRequest.getResourceType() );
+
         return createTransformerRequest( dhisRequest, scriptedDhisResourceFunction, requestResolver, DhisToFhirRequestResolver::resolveRules, ruleInfoPredicate, fhirClientFunction );
     }
 
@@ -294,6 +347,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         final ScriptedDhisResource scriptedResource = scriptedDhisResourceFunction.apply( requestResolver );
         final List<RuleInfo<? extends AbstractRule>> ruleInfos = ruleResolverFunction.apply( requestResolver, scriptedResource )
             .stream().filter( ruleInfoPredicate ).collect( Collectors.toList() );
+
         if ( ruleInfos.isEmpty() )
         {
             logger.info( "Could not find any rule to process DHIS resource." );
@@ -301,6 +355,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         }
 
         final FhirClient fhirClient = fhirClientFunction.apply( scriptedResource, requestResolver );
+
         if ( fhirClient == null )
         {
             logger.info( "Could not determine FHIR client to process DHIS resource." );
@@ -320,15 +375,19 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
 
         final List<RuleInfo<? extends AbstractRule>> ruleInfos = requestResolver.resolveRules( scriptedDhisResource );
         final RuleInfo<? extends AbstractRule> matchingRuleInfo = ruleInfos.stream().filter( ri -> ri.getRule().getId().equals( ruleId ) ).findFirst().orElse( null );
-        if ( (matchingRuleInfo == null) || !fhirResourceType.equals( matchingRuleInfo.getRule().getFhirResourceType() ) )
+
+        if ( matchingRuleInfo == null || !fhirResourceType.equals( matchingRuleInfo.getRule().getFhirResourceType() ) )
         {
             logger.info( "Could not find any matching rule to process DHIS resource." );
+
             return null;
         }
+
         final List<RuleInfo<? extends AbstractRule>> groupingRuleInfos = ruleInfos.stream()
             .filter( ri -> ri.getRule().isGrouping() ).collect( Collectors.toList() );
 
         final List<RuleInfo<? extends AbstractRule>> resultingRuleInfos;
+
         if ( groupingRuleInfos.isEmpty() )
         {
             resultingRuleInfos = Collections.singletonList( matchingRuleInfo );
@@ -342,6 +401,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
             resultingRuleInfos = ruleInfos.stream()
                 .filter( ri -> ri.getRule().isGrouping() || ri.getRule().getId().equals( ruleId ) ).collect( Collectors.toList() );
         }
+
         return createTransformerRequest( matchingRuleInfo.getRule().isGrouping(), fhirClient, dhisRequest, scriptedDhisResource, resultingRuleInfos );
     }
 
@@ -353,10 +413,11 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
 
         final Collection<FhirClientSystem> systems = fhirClientSystemRepository.findByFhirClient( fhirClient );
         final Map<FhirResourceType, ResourceSystem> resourceSystemsByType = systems.stream()
-            .map( s -> new ResourceSystem( s.getFhirResourceType(), s.getSystem().getSystemUri(), s.getCodePrefix(), s.getDefaultValue(), s.getSystem().getFhirDisplayName() ) )
+            .map( s -> new ResourceSystem( s.getFhirResourceType(), s.getSystem().getSystemUri(), s.getCodePrefix(), s.getDefaultValue(), s.getSystem().getFhirDisplayName(), s.isFhirId() ) )
             .collect( Collectors.toMap( ResourceSystem::getFhirResourceType, rs -> rs ) );
 
         final Map<String, DhisToFhirTransformerUtils> transformerUtils = this.transformerUtils.get( fhirClient.getFhirVersion() );
+
         if ( transformerUtils == null )
         {
             throw new TransformerMappingException( "No transformer utils can be found for FHIR version " + fhirClient.getFhirVersion() );
@@ -377,6 +438,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
 
         final DhisToFhirTransformerRequestImpl transformerRequestImpl = (DhisToFhirTransformerRequestImpl) transformerRequest;
         transformerRequestImpl.setInput( scriptedInput );
+
         return transformerRequest;
     }
 
@@ -385,6 +447,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
     {
         final Map<FhirResourceType, AvailableFhirClientResource> availableResourcesByType = availableResources.stream()
             .collect( Collectors.toMap( AvailableFhirClientResource::getResourceType, a -> a ) );
+
         // not all resources may be available on FHIR client
         return ruleInfos.stream().filter( r -> {
             final AvailableFhirClientResource availableResource = availableResourcesByType.get( r.getRule().getFhirResourceType() );
@@ -400,10 +463,12 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
     private DhisToFhirRequestResolver getRequestResolver( @Nonnull DhisResourceType resourceType )
     {
         final DhisToFhirRequestResolver requestResolver = requestResolvers.get( resourceType );
+
         if ( requestResolver == null )
         {
             throw new TransformerMappingException( "No request resolver can be found for DHIS resource type " + resourceType );
         }
+
         return requestResolver;
     }
 
@@ -415,6 +480,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
 
         final boolean firstRule = transformerRequestImpl.isFirstRule();
         RuleInfo<? extends AbstractRule> ruleInfo;
+
         while ( (ruleInfo = transformerRequestImpl.nextRule()) != null )
         {
             Cache transformerRequestCache = null;
@@ -435,13 +501,13 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
                 }
             }
 
-            final DhisToFhirTransformer<?, ?> transformer = this.transformers.get(
+            final SortedSet<DhisToFhirTransformer<?, ?>> transformers = this.transformers.get(
                 new FhirVersionedValue<>( transformerRequestImpl.getContext().getVersion(), ruleInfo.getRule().getDhisResourceType() ) );
-            if ( transformer == null )
+
+            if ( transformers == null )
             {
                 throw new TransformerMappingException( "No transformer can be found for FHIR version " +
-                    transformerRequestImpl.getContext().getVersion() +
-                    " mapping of DHIS resource type " + ruleInfo.getRule().getDhisResourceType() );
+                    transformerRequestImpl.getContext().getVersion() + " mapping of DHIS resource type " + ruleInfo.getRule().getDhisResourceType() );
             }
 
             final Map<String, Object> scriptVariables = new HashMap<>( transformerRequestImpl.getTransformerUtils() );
@@ -451,26 +517,35 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
             scriptVariables.put( ScriptVariable.ORGANIZATION_UNIT.getVariableName(), getScriptedOrganizationUnit( transformerRequestImpl.getInput() ) );
             if ( isApplicable( transformerRequestImpl.getContext(), transformerRequestImpl.getInput(), ruleInfo, scriptVariables ) )
             {
-                final DhisToFhirTransformOutcome<? extends IBaseResource> outcome = transformer.transformCasted( transformerRequest.getFhirClient(),
-                    transformerRequestImpl.getContext(), transformerRequestImpl.getInput(), ruleInfo, scriptVariables );
-                if ( outcome != null )
+                for ( final DhisToFhirTransformer<?, ?> transformer : transformers )
                 {
-                    logger.debug( "Rule {} used successfully for transformation of {} (stop={}).",
-                        ruleInfo, transformerRequestImpl.getInput().getResourceId(), ruleInfo.getRule().isStop() );
-                    if ( (transformerRequestKey != null) && !outcome.isDelete() )
+                    final DhisToFhirTransformOutcome<? extends IBaseResource> outcome = transformer.transformCasted( transformerRequest.getFhirClient(),
+                        transformerRequestImpl.getContext(), transformerRequestImpl.getInput(), ruleInfo, scriptVariables );
+
+                    if ( outcome != null )
                     {
-                        transformerRequestCache.put( transformerRequestKey, outcome.getResource() );
+                        logger.debug( "Rule {} used successfully for transformation of {} (stop={}).",
+                            ruleInfo, transformerRequestImpl.getInput().getResourceId(), ruleInfo.getRule().isStop() );
+
+                        if ( ( transformerRequestKey != null ) && !outcome.isDelete() )
+                        {
+                            transformerRequestCache.put( transformerRequestKey, outcome.getResource() );
+                        }
+
+                        return new DhisToFhirTransformOutcome<>( outcome, transformerRequestImpl.isLastRule() ? null : transformerRequestImpl );
                     }
-                    return new DhisToFhirTransformOutcome<>( outcome, transformerRequestImpl.isLastRule() ? null : transformerRequestImpl );
+
+                    // if the previous transformation caused a lock of any resource this must be released since the transformation has been rolled back
+                    lockManager.getCurrentLockContext().ifPresent( LockContext::unlockAll );
                 }
-                // if the previous transformation caused a lock of any resource this must be released since the transformation has been rolled back
-                lockManager.getCurrentLockContext().ifPresent( LockContext::unlockAll );
             }
         }
+
         if ( firstRule )
         {
             logger.debug( "No matching rule for {}.", transformerRequestImpl.getInput().getResourceId() );
         }
+
         return null;
     }
 
@@ -483,7 +558,7 @@ public class DhisToFhirTransformerServiceImpl implements DhisToFhirTransformerSe
         }
         final OrganizationUnit organizationUnit = organizationUnitService.findMetadataByReference( new Reference( dhisResource.getOrganizationUnitId(), ReferenceType.ID ) )
             .orElseThrow( () -> new TransformerDataException( "DHIS resource " + dhisResource.getResourceId() + " reference organization unit " + dhisResource.getOrganizationUnitId() + " that cannot be found." ) );
-        return new ImmutableScriptedOrganizationUnit( new WritableScriptedOrganizationUnit( organizationUnit ) );
+        return new ImmutableScriptedOrganizationUnit( new WritableScriptedOrganizationUnit( organizationUnit, scriptExecutionContext ) );
     }
 
     private boolean isApplicable( @Nonnull DhisToFhirTransformerContext context, @Nonnull ScriptedDhisResource input,

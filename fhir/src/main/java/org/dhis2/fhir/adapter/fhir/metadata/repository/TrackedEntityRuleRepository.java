@@ -28,12 +28,14 @@ package org.dhis2.fhir.adapter.fhir.metadata.repository;
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+import org.dhis2.fhir.adapter.dhis.model.Reference;
 import org.dhis2.fhir.adapter.fhir.metadata.model.FhirResourceType;
 import org.dhis2.fhir.adapter.fhir.metadata.model.MappedTrackedEntity;
 import org.dhis2.fhir.adapter.fhir.metadata.model.TrackedEntityRule;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.querydsl.QuerydslPredicateExecutor;
@@ -77,6 +79,12 @@ public interface TrackedEntityRuleRepository extends JpaRepository<TrackedEntity
     @Query( "SELECT r FROM #{#entityName} r WHERE r.fhirResourceType=:fhirResourceType AND r.trackedEntity=:trackedEntity AND r.enabled=true ORDER BY r.id" )
     Optional<TrackedEntityRule> findFirstByTrackedEntity( @Nonnull @Param( "fhirResourceType" ) FhirResourceType fhirResourceType,
         @Nonnull @Param( "trackedEntity" ) MappedTrackedEntity trackedEntity );
+
+    @Nonnull
+    @RestResource( exported = false )
+    @Cacheable( keyGenerator = "referenceCollectionKeyGenerator" )
+    @Query( "SELECT r FROM #{#entityName} r JOIN r.trackedEntity te WHERE r.enabled=true AND te.enabled=true AND te.trackedEntityReference IN (:trackedEntityTypeRefs) ORDER BY r.evaluationOrder DESC,r.id" )
+    List<TrackedEntityRule> findByTypeRefs( @Nonnull @Param( "trackedEntityTypeRefs" ) Collection<Reference> trackedEntityTypeRefs );
 
     @Override
     @Nonnull

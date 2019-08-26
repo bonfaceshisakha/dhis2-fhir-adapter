@@ -35,9 +35,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 /**
- * The outcome of the transformation between a FHIR resource and a DHIS 2 resource.
+ * The outcome of the transformation between a FHIR resource and a DHIS2 resource.
  *
- * @param <R> the concrete type of the returned DHIS 2 resource.
+ * @param <R> the concrete type of the returned DHIS2 resource.
  * @author volsch
  */
 public class FhirToDhisTransformOutcome<R extends DhisResource> extends FhirToDhisBaseTransformOutcome<R>
@@ -46,15 +46,15 @@ public class FhirToDhisTransformOutcome<R extends DhisResource> extends FhirToDh
 
     private final FhirToDhisTransformerRequest nextTransformerRequest;
 
-    public FhirToDhisTransformOutcome( @Nonnull AbstractRule rule, @Nonnull R resource )
+    public FhirToDhisTransformOutcome( @Nonnull AbstractRule rule, @Nonnull R resource, boolean created )
     {
-        super( rule, resource );
+        super( rule, resource, created );
         this.nextTransformerRequest = null;
     }
 
     public FhirToDhisTransformOutcome( @Nonnull FhirToDhisTransformOutcome<R> outcome, @Nullable FhirToDhisTransformerRequest nextTransformerRequest )
     {
-        super( outcome.getRule(), outcome.getResource() );
+        super( outcome.getRule(), outcome.getResource(), outcome.isCreated() );
         this.nextTransformerRequest = nextTransformerRequest;
     }
 

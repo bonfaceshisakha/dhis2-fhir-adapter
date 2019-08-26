@@ -32,9 +32,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.dhis2.fhir.adapter.dhis.model.DataValue;
-import org.dhis2.fhir.adapter.dhis.model.DhisResource;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceId;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceType;
+import org.dhis2.fhir.adapter.dhis.model.TrackedEntityDhisResource;
 import org.dhis2.fhir.adapter.dhis.model.WritableDataValue;
 import org.dhis2.fhir.adapter.dhis.tracker.trackedentity.TrackedEntityInstance;
 import org.dhis2.fhir.adapter.geo.Location;
@@ -48,13 +48,18 @@ import java.util.Objects;
 
 /**
  * Contains a DHIS2 Program Stage Instance (aka event).
+ *
+ * @author volsch
  */
-public class Event implements DhisResource, Serializable, Comparable<Event>
+public class Event implements TrackedEntityDhisResource, Serializable, Comparable<Event>
 {
     private static final long serialVersionUID = 4966183580394235575L;
 
     @JsonIgnore
     private boolean newResource;
+
+    @JsonIgnore
+    private boolean local;
 
     @JsonProperty( access = JsonProperty.Access.WRITE_ONLY )
     private boolean deleted;
@@ -63,7 +68,7 @@ public class Event implements DhisResource, Serializable, Comparable<Event>
     @JsonInclude( JsonInclude.Include.NON_NULL )
     private String id;
 
-    @JsonProperty
+    @JsonProperty( access = JsonProperty.Access.WRITE_ONLY )
     @JsonInclude( JsonInclude.Include.NON_NULL )
     private ZonedDateTime lastUpdated;
 
@@ -118,6 +123,7 @@ public class Event implements DhisResource, Serializable, Comparable<Event>
     {
         this.newResource = newResource;
         this.modified = newResource;
+        this.local = newResource;
         this.dataValues = new ArrayList<>();
     }
 
@@ -140,6 +146,29 @@ public class Event implements DhisResource, Serializable, Comparable<Event>
     public boolean isNewResource()
     {
         return newResource;
+    }
+
+    @Override
+    public void resetNewResource()
+    {
+        this.newResource = false;
+        this.modified = false;
+
+        if ( lastUpdated == null )
+        {
+            lastUpdated = ZonedDateTime.now();
+        }
+    }
+
+    @Override
+    public boolean isLocal()
+    {
+        return local;
+    }
+
+    public void setLocal( boolean local )
+    {
+        this.local = local;
     }
 
     public boolean isDeleted()
@@ -306,9 +335,9 @@ public class Event implements DhisResource, Serializable, Comparable<Event>
         return modified;
     }
 
-    public void setModified( boolean modified )
+    public void setModified()
     {
-        this.modified = modified;
+        this.modified = true;
     }
 
     @Nonnull
@@ -318,13 +347,16 @@ public class Event implements DhisResource, Serializable, Comparable<Event>
         {
             dataValues = new ArrayList<>();
         }
+
         WritableDataValue dataValue = dataValues.stream().filter(
             dv -> Objects.equals( dataElementId, dv.getDataElementId() ) ).findFirst().orElse( null );
+
         if ( dataValue == null )
         {
             dataValue = new WritableDataValue( dataElementId, true );
             dataValues.add( dataValue );
         }
+
         return dataValue;
     }
 

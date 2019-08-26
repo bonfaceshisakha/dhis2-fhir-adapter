@@ -74,10 +74,13 @@ public abstract class AbstractDhisToFhirDataProvider<R extends AbstractRule> imp
     protected SearchFilterCollector apply( @Nonnull FhirVersion fhirVersion, @Nonnull List<RuleInfo<R>> ruleInfos, @Nonnull SearchFilterCollector searchFilterCollector )
     {
         ruleInfos.forEach( ruleInfo -> {
+            final SearchFilter searchFilter = new SearchFilter( searchFilterCollector, onlyStringContains );
+            initSearchFilter( fhirVersion, ruleInfo, searchFilter );
+
             if ( ruleInfo.getRule().getFilterScript() != null )
             {
                 final Boolean result = scriptExecutor.execute( ruleInfo.getRule().getFilterScript(), fhirVersion,
-                    Collections.singletonMap( ScriptVariable.SEARCH_FILTER.getVariableName(), new SearchFilter( searchFilterCollector, onlyStringContains ) ),
+                    Collections.singletonMap( ScriptVariable.SEARCH_FILTER.getVariableName(), searchFilter ),
                     Collections.emptyMap(), Boolean.class );
 
                 if ( !Boolean.TRUE.equals( result ) )
@@ -86,7 +89,13 @@ public abstract class AbstractDhisToFhirDataProvider<R extends AbstractRule> imp
                 }
             }
         } );
+
         return searchFilterCollector;
+    }
+
+    protected void initSearchFilter( @Nonnull FhirVersion fhirVersion, @Nonnull RuleInfo<R> ruleInfo, @Nonnull SearchFilter searchFilter )
+    {
+        // method may be overridden
     }
 
     @Nullable
@@ -101,8 +110,8 @@ public abstract class AbstractDhisToFhirDataProvider<R extends AbstractRule> imp
     public PreparedDhisToFhirSearch prepareSearchCasted( @Nonnull FhirVersion fhirVersion, @Nonnull List<RuleInfo<? extends AbstractRule>> ruleInfos, @Nullable Map<String, List<String>> filter, @Nullable DateRangeParam lastUpdatedDateRange, int count ) throws DhisToFhirDataProviderException
     {
         final Class<R> ruleClass = getRuleClass();
-        final List<RuleInfo<R>> castedRuleInfos =
-            ruleInfos.stream().map( r -> new RuleInfo<>( getRuleClass().cast( r.getRule() ), r.getDhisDataReferences() ) ).collect( Collectors.toList() );
+        final List<RuleInfo<R>> castedRuleInfos = ruleInfos.stream().map( r -> new RuleInfo<>( getRuleClass().cast( r.getRule() ), r.getDhisDataReferences() ) ).collect( Collectors.toList() );
+
         return prepareSearch( fhirVersion, castedRuleInfos, filter, lastUpdatedDateRange, count );
     }
 }

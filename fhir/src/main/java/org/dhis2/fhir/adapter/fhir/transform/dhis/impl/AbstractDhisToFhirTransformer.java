@@ -31,17 +31,18 @@ package org.dhis2.fhir.adapter.fhir.transform.dhis.impl;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.primitive.IdDt;
 import org.apache.commons.lang3.StringUtils;
+import org.dhis2.fhir.adapter.dhis.model.DhisResourceType;
 import org.dhis2.fhir.adapter.fhir.data.repository.FhirDhisAssignmentRepository;
 import org.dhis2.fhir.adapter.fhir.metadata.model.AbstractRule;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ExecutableScript;
 import org.dhis2.fhir.adapter.fhir.metadata.model.FhirClient;
+import org.dhis2.fhir.adapter.fhir.metadata.model.FhirResourceMapping;
 import org.dhis2.fhir.adapter.fhir.metadata.model.FhirResourceType;
 import org.dhis2.fhir.adapter.fhir.metadata.model.RuleInfo;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ScriptVariable;
 import org.dhis2.fhir.adapter.fhir.metadata.model.System;
 import org.dhis2.fhir.adapter.fhir.metadata.model.TrackedEntityRule;
 import org.dhis2.fhir.adapter.fhir.metadata.repository.SystemRepository;
-import org.dhis2.fhir.adapter.fhir.model.FhirVersion;
 import org.dhis2.fhir.adapter.fhir.model.SystemCodeValue;
 import org.dhis2.fhir.adapter.fhir.repository.DhisFhirResourceId;
 import org.dhis2.fhir.adapter.fhir.repository.FhirResourceRepository;
@@ -52,6 +53,7 @@ import org.dhis2.fhir.adapter.fhir.transform.TransformerContext;
 import org.dhis2.fhir.adapter.fhir.transform.TransformerException;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.DhisToFhirTransformOutcome;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.DhisToFhirTransformerContext;
+import org.dhis2.fhir.adapter.fhir.transform.dhis.impl.util.AbstractAssignmentDhisToFhirTransformerUtils;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.impl.util.AbstractFhirResourceDhisToFhirTransformerUtils;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.impl.util.AbstractIdentifierDhisToFhirTransformerUtils;
 import org.dhis2.fhir.adapter.fhir.transform.fhir.model.ResourceSystem;
@@ -68,16 +70,18 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 /**
- * Transforms a DHIS 2 resource to a FHIR resource.
+ * Transforms a DHIS2 resource to a FHIR resource. The default priority of the transformer is <code>0</code>.
  *
- * @param <R> the concrete type of the DHIS 2 resource that is processed by this transformer.
+ * @param <R> the concrete type of the DHIS2 resource that is processed by this transformer.
  * @param <U> the concrete type of the transformer rule that is processed by this transformer.
  * @author volsch
  */
@@ -106,6 +110,25 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         this.fhirDhisAssignmentRepository = fhirDhisAssignmentRepository;
     }
 
+    @Override
+    public int getPriority()
+    {
+        return 0;
+    }
+
+    @Override
+    public int compareTo( @Nonnull DhisToFhirTransformer<?, ?> o )
+    {
+        final int value = getPriority() - o.getPriority();
+
+        if ( value != 0 )
+        {
+            return value;
+        }
+
+        return getClass().getSimpleName().compareTo( o.getClass().getSimpleName() );
+    }
+
     @Nonnull
     protected LockManager getLockManager()
     {
@@ -116,13 +139,6 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
     protected FhirResourceRepository getFhirResourceRepository()
     {
         return fhirResourceRepository;
-    }
-
-    @Nonnull
-    @Override
-    public Set<FhirVersion> getFhirVersions()
-    {
-        return FhirVersion.ALL;
     }
 
     @Nullable
@@ -153,47 +169,59 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         if ( context.isUseAdapterIdentifier() )
         {
             final IBaseResource resource = getResourceByAdapterIdentifier( fhirClient, context, ruleInfo, scriptVariables ).orElse( null );
+
             if ( resource != null )
             {
                 if ( !ruleInfo.getRule().isEffectiveFhirUpdateEnable() )
                 {
                     logger.info( "Existing FHIR resource could be found by adapter identifier, but rule {} does not allow updating FHIR resources.", ruleInfo );
+
                     return Optional.empty();
                 }
+
                 return Optional.of( resource );
             }
         }
 
         IBaseResource resource = getResourceBySystemIdentifier( fhirClient, context, ruleInfo, scriptVariables ).orElse( null );
+
         if ( resource != null )
         {
             if ( !ruleInfo.getRule().isEffectiveFhirUpdateEnable() )
             {
                 logger.info( "Existing FHIR resource could be found by system identifier, but rule {} does not allow updating FHIR resources.", ruleInfo );
+
                 return Optional.empty();
             }
+
             return Optional.of( resource );
         }
 
         resource = getResourceByAssignment( fhirClient, context, ruleInfo, scriptVariables ).orElse( null );
+
         if ( resource != null )
         {
             if ( !ruleInfo.getRule().isEffectiveFhirUpdateEnable() )
             {
                 logger.info( "Existing FHIR resource could be found by assigned identifier, but rule {} does not allow updating FHIR resources.", ruleInfo );
+
                 return Optional.empty();
             }
+
             return Optional.of( resource );
         }
 
         resource = getActiveResource( fhirClient, context, ruleInfo, scriptVariables ).orElse( null );
+
         if ( resource != null )
         {
             if ( !ruleInfo.getRule().isEffectiveFhirUpdateEnable() )
             {
                 logger.info( "Existing active FHIR resource could be found, but rule {} does not allow updating FHIR resources.", ruleInfo );
+
                 return Optional.empty();
             }
+
             return Optional.of( resource );
         }
 
@@ -207,24 +235,26 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         if ( context.getDhisRequest().isDhisFhirId() )
         {
             final IBaseResource baseResource = createResource( fhirClient, context, ruleInfo, scriptVariables, false );
+
             if ( baseResource == null )
             {
                 return Optional.empty();
             }
 
-            final ScriptedDhisResource scriptedDhisResource =
-                TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.INPUT, ScriptedDhisResource.class );
-            baseResource.setId( new IdDt( ruleInfo.getRule().getFhirResourceType().getResourceTypeName(),
-                DhisFhirResourceId.toString( scriptedDhisResource.getResourceType(), Objects.requireNonNull( scriptedDhisResource.getId() ), ruleInfo.getRule().getId() ) ) );
+            final ScriptedDhisResource scriptedDhisResource = TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.INPUT, ScriptedDhisResource.class );
+            baseResource.setId( new IdDt( ruleInfo.getRule().getFhirResourceType().getResourceTypeName(), createDhisFhirResourceId( ruleInfo, scriptedDhisResource ) ) );
+
             if ( context.getDhisRequest().getLastUpdated() != null )
             {
                 baseResource.getMeta().setLastUpdated( Date.from( context.getDhisRequest().getLastUpdated().toInstant() ) );
             }
+
             // FHIR resource will be filled with read data
             return Optional.of( baseResource );
         }
 
         IBaseResource resource = getExistingResource( fhirClient, context, ruleInfo, scriptVariables ).orElse( null );
+
         if ( resource != null )
         {
             return Optional.of( resource );
@@ -233,6 +263,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         if ( ruleInfo.getRule().isEffectiveFhirCreateEnable() )
         {
             resource = createResource( fhirClient, context, ruleInfo, scriptVariables, sync );
+
             if ( (resource != null) && !sync )
             {
                 lockResource( fhirClient, context, ruleInfo, scriptVariables );
@@ -244,12 +275,26 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
     }
 
     @Nonnull
+    protected String createDhisFhirResourceId( @Nonnull RuleInfo<? extends AbstractRule> ruleInfo, @Nonnull ScriptedDhisResource dhisResource )
+    {
+        if ( ruleInfo.getRule().isSimpleFhirId() )
+        {
+            return DhisFhirResourceId.toString( null, Objects.requireNonNull( dhisResource.getId() ), null );
+        }
+        else
+        {
+            return DhisFhirResourceId.toString( dhisResource.getResourceType(), Objects.requireNonNull( dhisResource.getId() ), ruleInfo.getRule().getId() );
+        }
+    }
+
+    @Nonnull
     protected Optional<? extends IBaseResource> getResourceByAdapterIdentifier(
         @Nonnull FhirClient fhirClient, @Nonnull DhisToFhirTransformerContext context,
         @Nonnull RuleInfo<U> ruleInfo, @Nonnull Map<String, Object> scriptVariables ) throws TransformerException
     {
         final R scriptedDhisResource = getDhisResourceClass().cast( TransformerUtils.getScriptVariable(
             scriptVariables, ScriptVariable.INPUT, ScriptedDhisResource.class ) );
+
         return getResourceByAdapterIdentifierInternal( fhirClient, context, ruleInfo, scriptedDhisResource, scriptVariables );
     }
 
@@ -264,6 +309,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         }
 
         final SystemCodeValue identifier = new SystemCodeValue( getAdapterIdentifierSystem().getSystemUri(), createAdapterIdentifierValue( ruleInfo, scriptedDhisResource ) );
+
         return getFhirResourceRepository().findRefreshedByIdentifier( fhirClient.getId(), fhirClient.getFhirVersion(), fhirClient.getFhirEndpoint(), ruleInfo.getRule().getFhirResourceType().getResourceTypeName(), identifier )
             .map( r -> clone( context, r ) );
     }
@@ -274,6 +320,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
     {
         final R scriptedDhisResource = getDhisResourceClass().cast(
             TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.INPUT, ScriptedDhisResource.class ) );
+
         return getResourceBySystemIdentifierInternal( fhirClient, context, ruleInfo,
             scriptedDhisResource, scriptVariables, new DefaultIdentifierValueProvider() );
     }
@@ -286,10 +333,12 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
             TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.INPUT, ScriptedDhisResource.class ) );
         final String fhirResourceId = fhirDhisAssignmentRepository.findFirstFhirResourceId( ruleInfo.getRule(), fhirClient,
             Objects.requireNonNull( scriptedDhisResource.getResourceId() ) );
+
         if ( fhirResourceId == null )
         {
             return Optional.empty();
         }
+
         return getFhirResourceRepository().findRefreshed( fhirClient.getId(), fhirClient.getFhirVersion(), fhirClient.getFhirEndpoint(), ruleInfo.getRule().getFhirResourceType().getResourceTypeName(), fhirResourceId )
             .map( r -> clone( context, r ) );
     }
@@ -300,17 +349,20 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         @Nonnull RX scriptedDhisResource, @Nonnull Map<String, Object> scriptVariables, @Nonnull IdentifierValueProvider<UX, RX> identifierValueProvider ) throws TransformerException
     {
         final ResourceSystem resourceSystem = context.getResourceSystem( ruleInfo.getRule().getFhirResourceType() );
+
         if ( resourceSystem == null )
         {
             return Optional.empty();
         }
 
         final String identifierValue = identifierValueProvider.getIdentifierValue( context, ruleInfo, null, scriptedDhisResource, scriptVariables );
+
         if ( identifierValue == null )
         {
             logger.info( "FHIR resource type {} defines resource system, but resource does not include an identifier.", ruleInfo.getRule().getFhirResourceType() );
             return Optional.empty();
         }
+
         if ( StringUtils.isNotBlank( resourceSystem.getCodePrefix() ) && (!identifierValue.startsWith( resourceSystem.getCodePrefix() ) || identifierValue.equals( resourceSystem.getCodePrefix() )) )
         {
             logger.info( "Resource identifier \"{}\" does not start with required prefix \"{}\" for resource type {}.",
@@ -319,6 +371,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         }
 
         final SystemCodeValue identifier = new SystemCodeValue( resourceSystem.getSystem(), identifierValue.substring( StringUtils.length( resourceSystem.getCodePrefix() ) ) );
+
         return getFhirResourceRepository().findRefreshedByIdentifier( fhirClient.getId(), fhirClient.getFhirVersion(), fhirClient.getFhirEndpoint(), ruleInfo.getRule().getFhirResourceType().getResourceTypeName(), identifier )
             .map( r -> clone( context, r ) );
     }
@@ -339,6 +392,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         {
             return null;
         }
+
         return resource;
     }
 
@@ -348,11 +402,12 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
             getDhisResourceClass().cast( TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.INPUT, ScriptedDhisResource.class ) );
         final AbstractIdentifierDhisToFhirTransformerUtils identifierUtils =
             TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.IDENTIFIER_UTILS, AbstractIdentifierDhisToFhirTransformerUtils.class );
-
         final ResourceSystem resourceSystem = context.getResourceSystem( ruleInfo.getRule().getFhirResourceType() );
+
         if ( resourceSystem != null )
         {
             final String identifierValue = getIdentifierValue( context, ruleInfo, null, scriptedDhisResource, scriptVariables );
+
             if ( identifierValue == null )
             {
                 logger.debug( "FHIR resource type {} defines resource system, but tracked entity does not include an identifier.", ruleInfo.getRule().getFhirResourceType() );
@@ -363,13 +418,17 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
                 {
                     logger.info( "Tracked entity identifier \"{}\" does not start with required prefix \"{}\" for resource type {}.",
                         identifierValue, resourceSystem.getCodePrefix(), ruleInfo.getRule().getFhirResourceType() );
+
                     return false;
                 }
+
                 final SystemCodeValue identifier = new SystemCodeValue( resourceSystem.getSystem(), identifierValue.substring( StringUtils.length( resourceSystem.getCodePrefix() ) ) );
+
                 if ( sync )
                 {
                     lockFhirIdentifier( context, identifier );
                 }
+
                 identifierUtils.addOrUpdateIdentifier( resource, identifier, resourceSystem.getFhirDisplayName() );
             }
         }
@@ -378,12 +437,15 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         {
             final System adapterIdentifierSystem = getAdapterIdentifierSystem();
             final SystemCodeValue identifier = new SystemCodeValue( adapterIdentifierSystem.getSystemUri(), createAdapterIdentifierValue( ruleInfo, scriptedDhisResource ) );
+
             if ( sync )
             {
                 lockFhirIdentifier( context, identifier );
             }
+
             identifierUtils.addOrUpdateIdentifier( resource, identifier, adapterIdentifierSystem.getFhirDisplayName(), true );
         }
+
         return true;
     }
 
@@ -403,14 +465,66 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         }
     }
 
+    protected boolean transformFhirResourceType( @Nonnull DhisToFhirTransformerContext context, @Nonnull RuleInfo<U> ruleInfo, @Nonnull Map<String, Object> variables, @Nonnull FhirResourceMapping resourceMapping,
+        @Nonnull ScriptedDhisResource input, @Nonnull IBaseResource output )
+    {
+        if ( context.getDhisRequest().isCompleteTransformation() )
+        {
+            if ( ( resourceMapping.getExpStatusTransformScript() != null ) &&
+                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpStatusTransformScript(), variables, Boolean.class ) ) )
+            {
+                logger.info( "Resulting DHIS status could not be transformed into FHIR resource {} with type {}.",
+                    output.getIdElement().toUnqualifiedVersionless(), resourceMapping.getFhirResourceType() );
+
+                return false;
+            }
+
+            if ( ( resourceMapping.getExpTeiTransformScript() != null ) &&
+                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpTeiTransformScript(), variables, Boolean.class ) ) )
+            {
+                logger.info( "Resulting DHIS TEI could not be transformed into FHIR resource {}.",
+                    resourceMapping.getFhirResourceType() );
+
+                return false;
+            }
+
+            if ( ( resourceMapping.getExpOrgUnitTransformScript() != null ) &&
+                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpOrgUnitTransformScript(), variables, Boolean.class ) ) )
+            {
+                logger.info( "DHIS Organization Unit {} could not be transformed into FHIR resource {}.",
+                    input.getOrganizationUnitId(), resourceMapping.getFhirResourceType() );
+
+                return false;
+            }
+
+            if ( ( resourceMapping.getExpGeoTransformScript() != null ) &&
+                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpGeoTransformScript(), variables, Boolean.class ) ) )
+            {
+                return false;
+            }
+
+            if ( ( resourceMapping.getExpDateTransformScript() != null ) &&
+                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpDateTransformScript(), variables, Boolean.class ) ) )
+            {
+                logger.info( "Date could not be transformed into FHIR resource {}.",
+                    resourceMapping.getFhirResourceType() );
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     protected Optional<? extends IBaseResource> getTrackedEntityFhirResource( @Nonnull FhirClient fhirClient, @Nonnull DhisToFhirTransformerContext context,
         @Nonnull RuleInfo<TrackedEntityRule> ruleInfo, @Nonnull FhirResourceType trackedEntityResourceType,
         @Nonnull ScriptedTrackedEntityInstance scriptedTrackedEntityInstance, @Nonnull Map<String, Object> scriptVariables ) throws TransformerException
     {
         IBaseResource resource;
+
         if ( context.getDhisRequest().isDhisFhirId() )
         {
             final IBaseReference reference = context.getDhisFhirResourceReference( scriptedTrackedEntityInstance, trackedEntityResourceType );
+
             if ( reference == null )
             {
                 return Optional.empty();
@@ -424,6 +538,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         else
         {
             resource = getResourceBySystemIdentifierInternal( fhirClient, context, ruleInfo, scriptedTrackedEntityInstance, scriptVariables, new TrackedEntityIdentifierValueProvider() ).orElse( null );
+
             if ( resource != null )
             {
                 return Optional.of( resource );
@@ -433,6 +548,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
                 resource = getResourceByAdapterIdentifierInternal( fhirClient, context, ruleInfo, scriptedTrackedEntityInstance, scriptVariables ).orElse( null );
             }
         }
+
         return Optional.ofNullable( resource );
     }
 
@@ -459,10 +575,12 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         }
 
         final T modifiedResource = clone( context, resource );
+
         if ( !updateIdentifiers( context, ruleInfo, modifiedResource, scriptVariables, false ) )
         {
             return null;
         }
+
         return modifiedResource;
     }
 
@@ -484,14 +602,14 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
 
         final AbstractFhirResourceDhisToFhirTransformerUtils fhirResourceUtils =
             TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.FHIR_RESOURCE_UTILS, AbstractFhirResourceDhisToFhirTransformerUtils.class );
+
         return fhirResourceUtils.equalsDeep( base1, base2 );
     }
 
     @Nonnull
-    protected String createAdapterIdentifierValue( @Nonnull RuleInfo<? extends AbstractRule> rule, @Nonnull ScriptedDhisResource dhisResource )
+    protected String createAdapterIdentifierValue( @Nonnull RuleInfo<? extends AbstractRule> ruleInfo, @Nonnull ScriptedDhisResource dhisResource )
     {
-        return DhisFhirResourceId.toString( rule.getRule().getDhisResourceType(),
-            Objects.requireNonNull( dhisResource.getId() ), rule.getRule().getId() );
+        return createDhisFhirResourceId( ruleInfo, dhisResource );
     }
 
     @Nullable
@@ -509,6 +627,25 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
         }
 
         return Boolean.TRUE.equals( executeScript( context, ruleInfo, ruleInfo.getRule().getTransformExpScript(), scriptVariables, Boolean.class ) );
+    }
+
+    @Nonnull
+    protected <T extends IBaseReference> List<T> createAssignedFhirReferences( @Nonnull DhisToFhirTransformerContext context, @Nonnull RuleInfo<U> ruleInfo, @Nonnull Map<String, Object> scriptVariables,
+        @Nonnull DhisResourceType dhisResourceType, @Nullable String dhisId, @Nonnull FhirResourceType fhirResourceType )
+    {
+        @SuppressWarnings( "unchecked" ) final T reference = (T) createAssignedFhirReference( context, ruleInfo, scriptVariables, dhisResourceType, dhisId, fhirResourceType );
+
+        return reference == null ? new ArrayList<>() : new ArrayList<>( Collections.singletonList( reference ) );
+    }
+
+    @Nullable
+    protected IBaseReference createAssignedFhirReference( @Nonnull DhisToFhirTransformerContext context, @Nonnull RuleInfo<U> ruleInfo, @Nonnull Map<String, Object> scriptVariables,
+        @Nonnull DhisResourceType dhisResourceType, @Nullable String dhisId, @Nonnull FhirResourceType fhirResourceType )
+    {
+        final AbstractAssignmentDhisToFhirTransformerUtils assignmentTransformerUtils = TransformerUtils.getScriptVariable(
+            scriptVariables, ScriptVariable.ASSIGNMENT_UTILS, AbstractAssignmentDhisToFhirTransformerUtils.class );
+
+        return assignmentTransformerUtils.getMappedFhirId( context, ruleInfo.getRule(), dhisResourceType, dhisId, fhirResourceType );
     }
 
     /**
@@ -551,6 +688,7 @@ public abstract class AbstractDhisToFhirTransformer<R extends ScriptedDhisResour
             {
                 throw new FatalTransformerException( "Identifier value of a tracked entity instance cannot be looked up with an alternative lookup script." );
             }
+
             return AbstractDhisToFhirTransformer.this.getTrackedEntityIdentifierValue( context, ruleInfo, scriptedDhisResource, scriptVariables );
         }
     }

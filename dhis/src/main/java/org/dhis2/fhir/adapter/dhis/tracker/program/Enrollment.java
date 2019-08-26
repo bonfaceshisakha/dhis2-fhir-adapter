@@ -31,9 +31,9 @@ package org.dhis2.fhir.adapter.dhis.tracker.program;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.dhis2.fhir.adapter.dhis.model.DhisResource;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceId;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceType;
+import org.dhis2.fhir.adapter.dhis.model.TrackedEntityDhisResource;
 import org.dhis2.fhir.adapter.dhis.tracker.trackedentity.TrackedEntityInstance;
 import org.dhis2.fhir.adapter.geo.Location;
 
@@ -48,7 +48,7 @@ import java.util.List;
  *
  * @author volsch
  */
-public class Enrollment implements DhisResource, Serializable
+public class Enrollment implements TrackedEntityDhisResource, Serializable
 {
     private static final long serialVersionUID = 6528591138270821481L;
 
@@ -58,11 +58,14 @@ public class Enrollment implements DhisResource, Serializable
     @JsonIgnore
     private boolean modified;
 
+    @JsonIgnore
+    private boolean local;
+
     @JsonProperty( "enrollment" )
     @JsonInclude( JsonInclude.Include.NON_NULL )
     private String id;
 
-    @JsonProperty
+    @JsonProperty( access = JsonProperty.Access.WRITE_ONLY )
     @JsonInclude( JsonInclude.Include.NON_NULL )
     private ZonedDateTime lastUpdated;
 
@@ -87,6 +90,8 @@ public class Enrollment implements DhisResource, Serializable
 
     private Location coordinate;
 
+    @JsonProperty
+    @JsonInclude( JsonInclude.Include.NON_NULL )
     private List<Event> events;
 
     public Enrollment()
@@ -94,10 +99,16 @@ public class Enrollment implements DhisResource, Serializable
         super();
     }
 
+    public Enrollment( @Nonnull String id )
+    {
+        this.id = id;
+    }
+
     public Enrollment( boolean newResource )
     {
         this.newResource = newResource;
         this.modified = newResource;
+        this.local = newResource;
         this.events = new ArrayList<>();
     }
 
@@ -112,6 +123,29 @@ public class Enrollment implements DhisResource, Serializable
     public boolean isNewResource()
     {
         return newResource;
+    }
+
+    @Override
+    public void resetNewResource()
+    {
+        this.newResource = false;
+        this.modified = false;
+
+        if ( lastUpdated == null )
+        {
+            lastUpdated = ZonedDateTime.now();
+        }
+    }
+
+    @Override
+    public boolean isLocal()
+    {
+        return local;
+    }
+
+    public void setLocal( boolean local )
+    {
+        this.local = local;
     }
 
     @Nonnull

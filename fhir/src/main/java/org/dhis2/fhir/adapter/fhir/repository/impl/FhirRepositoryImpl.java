@@ -344,14 +344,15 @@ public class FhirRepositoryImpl implements FhirRepository
         final WritableFhirRequest fhirRequest = new WritableFhirRequest();
         fhirRequest.setResourceType( FhirResourceType.getByResource( resource ) );
         fhirRequest.setLastUpdated( getLastUpdated( resource ) );
-        fhirRequest.setResourceId( (resource.getMeta() == null) ? null : resource.getIdElement().getIdPart() );
-        fhirRequest.setResourceVersionId( (resource.getMeta() == null) ? null : resource.getMeta().getVersionId() );
+        fhirRequest.setResourceId( resource.getMeta() == null ? null : resource.getIdElement().getIdPart() );
+        fhirRequest.setResourceVersionId( resource.getMeta() == null ? null : resource.getMeta().getVersionId() );
+        fhirRequest.setFhirClientId( fhirClientResource.getFhirClient().getId() );
         fhirRequest.setFhirClientResourceId( fhirClientResource.getId() );
         fhirRequest.setVersion( fhirClientResource.getFhirClient().getFhirVersion() );
         fhirRequest.setParameters( ArrayListMultimap.create() );
         fhirRequest.setFhirClientCode( fhirClientResource.getFhirClient().getCode() );
         fhirRequest.setResourceSystemsByType( systems.stream()
-            .map( s -> new ResourceSystem( s.getFhirResourceType(), s.getSystem().getSystemUri(), s.getCodePrefix(), s.getDefaultValue(), s.getSystem().getFhirDisplayName() ) )
+            .map( s -> new ResourceSystem( s.getFhirResourceType(), s.getSystem().getSystemUri(), s.getCodePrefix(), s.getDefaultValue(), s.getSystem().getFhirDisplayName(), s.isFhirId() ) )
             .collect( Collectors.toMap( ResourceSystem::getFhirResourceType, rs -> rs ) ) );
 
         if ( fhirRepositoryOperation == null )
@@ -365,6 +366,7 @@ public class FhirRepositoryImpl implements FhirRepository
             fhirRequest.setRequestMethod( getRequestMethod( fhirRepositoryOperation ) );
             fhirRequest.setDhisFhirId( true );
             fhirRequest.setFirstRuleOnly( true );
+
             if ( fhirRepositoryOperation.getDhisFhirResourceId() != null )
             {
                 fhirRequest.setDhisResourceType( fhirRepositoryOperation.getDhisFhirResourceId().getType() );
@@ -393,6 +395,7 @@ public class FhirRepositoryImpl implements FhirRepository
                 }
                 else
                 {
+                    final boolean created = outcome.isCreated();
                     final DhisResource persistedDhisResource = dhisResourceRepository.save( outcome.getResource() );
 
                     if ( fhirRepositoryOperation == null )
@@ -404,14 +407,14 @@ public class FhirRepositoryImpl implements FhirRepository
 
                     if ( operationOutcome == null )
                     {
-                        final String dhisFhirResourceId = DhisFhirResourceId.toString( persistedDhisResource.getResourceType(), persistedDhisResource.getId(), outcome.getRule().getId() );
+                        final String dhisFhirResourceId = createDhisFhirResourceId( outcome, persistedDhisResource );
 
                         if ( fhirRequest.isDhisFhirId() && ( resource.getIdElement().isEmpty() || resource.getIdElement().isLocal() || !DhisFhirResourceId.isValid( resource.getIdElement().getIdPart() ) ) )
                         {
                             resource.setId( new IdDt( Objects.requireNonNull( fhirRequest.getResourceType() ).getResourceTypeName(), dhisFhirResourceId ) );
                         }
 
-                        operationOutcome = new FhirRepositoryOperationOutcome( dhisFhirResourceId );
+                        operationOutcome = new FhirRepositoryOperationOutcome( dhisFhirResourceId, created );
                     }
 
                     transformerRequest = outcome.getNextTransformerRequest();
@@ -424,7 +427,20 @@ public class FhirRepositoryImpl implements FhirRepository
     }
 
     @Nonnull
-    private FhirRequestMethod getRequestMethod( @Nonnull FhirRepositoryOperation fhirRepositoryOperation )
+    protected String createDhisFhirResourceId( @Nonnull FhirToDhisTransformOutcome<? extends DhisResource> outcome, @Nonnull DhisResource persistedDhisResource )
+    {
+        if ( outcome.getRule().isSimpleFhirId() )
+        {
+            return DhisFhirResourceId.toString( null, persistedDhisResource.getId(), null );
+        }
+        else
+        {
+            return DhisFhirResourceId.toString( persistedDhisResource.getResourceType(), persistedDhisResource.getId(), outcome.getRule().getId() );
+        }
+    }
+
+    @Nonnull
+    protected FhirRequestMethod getRequestMethod( @Nonnull FhirRepositoryOperation fhirRepositoryOperation )
     {
         switch ( fhirRepositoryOperation.getOperationType() )
         {
@@ -432,6 +448,8 @@ public class FhirRepositoryImpl implements FhirRepository
                 return FhirRequestMethod.CREATE;
             case UPDATE:
                 return FhirRequestMethod.UPDATE;
+            case CREATE_OR_UPDATE:
+                return FhirRequestMethod.CREATE_OR_UPDATE;
             default:
                 throw new AssertionError( "Unhandled operation type: " + fhirRepositoryOperation.getOperationType() );
         }

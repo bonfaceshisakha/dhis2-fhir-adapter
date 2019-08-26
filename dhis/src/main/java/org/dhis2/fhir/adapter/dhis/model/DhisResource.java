@@ -42,8 +42,8 @@ import java.time.ZonedDateTime;
 public interface DhisResource extends Identifiable<String>, Serializable
 {
     /**
-     * @return the unique ID of the DHIS 2 organization unit to which this resource belongs,
-     * or <code>null</code> if this resource does not belong to any DHIS 2 organization unit.
+     * @return the unique ID of the DHIS2 organization unit to which this resource belongs,
+     * or <code>null</code> if this resource does not belong to any DHIS2 organization unit.
      */
     String getOrgUnitId();
 
@@ -69,9 +69,20 @@ public interface DhisResource extends Identifiable<String>, Serializable
     DhisResourceType getResourceType();
 
     /**
+     * @return if the resource has not yet been persisted on DHIS2 and exists
+     * non-persisted on adapter side only.
+     */
+    boolean isLocal();
+
+    /**
      * @return <code>true</code> if the resource is new and must be created,
      * <code>false</code> if this resource is an existing resource that already
      * contains a unique ID.
      */
     boolean isNewResource();
+
+    /**
+     * Resets that the resource is a new resource (after persisting the resource).
+     */
+    void resetNewResource();
 }

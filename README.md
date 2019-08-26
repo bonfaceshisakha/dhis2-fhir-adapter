@@ -2,8 +2,8 @@
 ## Overview
 This repository contains the source code of the DHIS2 FHIR Adapter. The initial scope of the Adapter 
  was the import of FHIR Resources into DHIS2 Tracker by using FHIR Subscriptions. This approach has been discussed on the [first integration workshop between DHIS2 and HL7-FHIR](http://sil-asia.org/sil-asia-dhis2-fhir-integration-meeting/).
-
-In order to eliminate the need of a FHIR server, also FHIR interfaces that use the functionality of the existing import and export will be supported. This simplifies the integration of the adapter into non FHIR server use cases.
+ 
+A guide for a simple configuration and the use of the FHIR Interfaces can be found in this [YouTube Video](https://youtu.be/i7XFeBVpioM). This does not include the comprehensive features that are described below.
 
 The import and export of clinical data works on the basis of a domain specific business rule engine that decides about transformations of patient related clinical data to questionnaire-like structures (DHIS2 Tracker Programs and their Program Stages). It is 
  optimized for national FHIR profiles that are based on standard coding systems like LOINC, SNOMED CT, CVX and others or even on national coding systems (e.g. national coding system for immunization). A specific DHIS 2 FHIR profile that allows the mapping of 
@@ -157,13 +157,9 @@ The adapter WAR can be run with a servlet container 3.1 or later (like Apache To
 Since the created WAR file is an executable WAR file, also the following command can be entered in folder app/target in the console:
 
     java -jar dhis2-fhir-adapter.war    
-
-For the initial setup of the Adapter a simple user interface is provided. To access the initial setup user interface, the initial setup must have been enabled when starting the adapter. The following command can be entered in the console to start the 
- Adapter with initial setup enabled:
- 
-    java -jar dhis2-fhir-adapter.war --adapter-setup=true
-    
-With the default configuration the initial setup user interface can be accessed in any web browser by using `http://localhost:8081/setup`. The web browser will ask for a username and password of a DHIS2 user that has privilege F_SYSTEM_SETTING. After 
+        
+With the default configuration the initial setup user interface can be accessed in any web browser by using `http://localhost:8081/setup`. The web browser will ask for a username and password of a DHIS2 user that has privilege F_SYSTEM_SETTING. 
+After 
  successful authentication a setup form will be displayed with further instructions and examples. The initial setup can be made once only and the initial setup form will not be accessible anymore. 
  
 After successful initial setup the FHIR REST interfaces are accessible under the following base URIs. Basic and OAuth2 authentication and authorization of DHIS 2 is supported.

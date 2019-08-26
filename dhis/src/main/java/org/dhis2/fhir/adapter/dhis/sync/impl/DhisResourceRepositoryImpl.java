@@ -28,18 +28,21 @@ package org.dhis2.fhir.adapter.dhis.sync.impl;
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+import org.dhis2.fhir.adapter.dhis.aggregate.DataValueSet;
+import org.dhis2.fhir.adapter.dhis.aggregate.DataValueSetService;
 import org.dhis2.fhir.adapter.dhis.model.DhisResource;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceId;
 import org.dhis2.fhir.adapter.dhis.model.Reference;
 import org.dhis2.fhir.adapter.dhis.model.ReferenceType;
 import org.dhis2.fhir.adapter.dhis.orgunit.OrganizationUnitService;
 import org.dhis2.fhir.adapter.dhis.sync.DhisResourceRepository;
+import org.dhis2.fhir.adapter.dhis.tracker.program.Enrollment;
 import org.dhis2.fhir.adapter.dhis.tracker.program.EnrollmentService;
 import org.dhis2.fhir.adapter.dhis.tracker.program.Event;
 import org.dhis2.fhir.adapter.dhis.tracker.program.EventService;
 import org.dhis2.fhir.adapter.dhis.tracker.program.ProgramMetadataService;
+import org.dhis2.fhir.adapter.dhis.tracker.program.ProgramStageMetadataService;
 import org.dhis2.fhir.adapter.dhis.tracker.trackedentity.TrackedEntityInstance;
-import org.dhis2.fhir.adapter.dhis.tracker.trackedentity.TrackedEntityMetadataService;
 import org.dhis2.fhir.adapter.dhis.tracker.trackedentity.TrackedEntityService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,13 +52,13 @@ import javax.annotation.Nonnull;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import org.dhis2.fhir.adapter.dhis.tracker.program.Enrollment;
 
 /**
  * Implementation of {@link DhisResourceRepository}.
  *
  * @author volsch
- * @author Charles Chigoriwa
+ * @author Charles Chigoriwa (ITINORDIC)
+ * @author David Katuscak
  */
 @Component
 public class DhisResourceRepositoryImpl implements DhisResourceRepository
@@ -64,26 +67,29 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
 
     private final OrganizationUnitService organizationUnitService;
 
-    private final TrackedEntityService trackedEntityService;
+    private final ProgramMetadataService programMetadataService;
 
-    private final TrackedEntityMetadataService trackedEntityMetadataService;
+    private final ProgramStageMetadataService programStageMetadataService;
+
+    private final TrackedEntityService trackedEntityService;
 
     private final EnrollmentService enrollmentService;
 
     private final EventService eventService;
 
-    private final ProgramMetadataService programMetadataService;
+    private final DataValueSetService dataValueSetService;
 
-    public DhisResourceRepositoryImpl( @Nonnull OrganizationUnitService organizationUnitService,
-        @Nonnull TrackedEntityService trackedEntityService, @Nonnull TrackedEntityMetadataService trackedEntityMetadataService,
-        @Nonnull EnrollmentService enrollmentService, @Nonnull EventService eventService, @Nonnull ProgramMetadataService programMetadataService )
+    public DhisResourceRepositoryImpl( @Nonnull OrganizationUnitService organizationUnitService, ProgramMetadataService programMetadataService,
+        @Nonnull ProgramStageMetadataService programStageMetadataService, @Nonnull TrackedEntityService trackedEntityService,
+        @Nonnull EnrollmentService enrollmentService, @Nonnull EventService eventService, @Nonnull DataValueSetService dataValueSetService )
     {
         this.organizationUnitService = organizationUnitService;
+        this.programMetadataService = programMetadataService;
+        this.programStageMetadataService = programStageMetadataService;
         this.trackedEntityService = trackedEntityService;
-        this.trackedEntityMetadataService = trackedEntityMetadataService;
         this.enrollmentService = enrollmentService;
         this.eventService = eventService;
-        this.programMetadataService = programMetadataService;
+        this.dataValueSetService = dataValueSetService;
     }
 
     @Nonnull
@@ -94,14 +100,20 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
         {
             case ORGANIZATION_UNIT:
                 return organizationUnitService.findOneByReference( new Reference( dhisResourceId.getId(), ReferenceType.ID ) );
+            case PROGRAM_METADATA:
+                return programMetadataService.findOneByReference( new Reference( dhisResourceId.getId(), ReferenceType.ID ) );
+            case PROGRAM_STAGE_METADATA:
+                return programStageMetadataService.findOneByReference( new Reference( dhisResourceId.getId(), ReferenceType.ID ) );
             case TRACKED_ENTITY:
                 return trackedEntityService.findOneByIdRefreshed( dhisResourceId.getId() );
             case PROGRAM_STAGE_EVENT:
                 return eventService.findOneById( dhisResourceId.getId() );
             case ENROLLMENT:
                 return enrollmentService.findOneById( dhisResourceId.getId() );
+            case DATA_VALUE_SET:
+                throw new UnsupportedOperationException( "Finding DHIS2 DataValueSet resources is not supported." );
             default:
-                throw new AssertionError( "Unhandled DHIS resource type: " + dhisResourceId.getType() );
+                throw new AssertionError( "Unhandled DHIS2 resource type: " + dhisResourceId.getType() );
         }
     }
 
@@ -114,11 +126,14 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
             case PROGRAM_STAGE_EVENT:
                 return eventService.findOneDeletedById( dhisResourceId.getId() );
             case ORGANIZATION_UNIT:
+            case PROGRAM_METADATA:
+            case PROGRAM_STAGE_METADATA:
             case TRACKED_ENTITY:
             case ENROLLMENT:
-                throw new UnsupportedOperationException( "Retrieving deleted " + dhisResourceId.getType() + " DHIS resource items is not supported." );
+            case DATA_VALUE_SET:
+                throw new UnsupportedOperationException( "Retrieving deleted " + dhisResourceId.getType() + " DHIS2 resource items is not supported." );
             default:
-                throw new AssertionError( "Unhandled DHIS resource type: " + dhisResourceId.getType() );
+                throw new AssertionError( "Unhandled DHIS2 resource type: " + dhisResourceId.getType() );
         }
     }
 
@@ -140,13 +155,16 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
                 saveTrackedEntityInstance( (TrackedEntityInstance) resource );
                 break;
             case ENROLLMENT:
-                saveEnrollment((Enrollment)resource);
+                saveEnrollment( (Enrollment) resource );
                 break;
             case PROGRAM_STAGE_EVENT:
                 saveEvent( (Event) resource );
                 break;
+            case DATA_VALUE_SET:
+                saveDataValueSet( (DataValueSet) resource );
+                break;
             default:
-                throw new AssertionError( "Unhandled DHIS resource type: " + resource.getResourceType() );
+                throw new AssertionError( "Unhandled DHIS2 resource type: " + resource.getResourceType() );
         }
         return resource;
     }
@@ -162,8 +180,10 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
                 return enrollmentService.delete( resource.getId() );
             case PROGRAM_STAGE_EVENT:
                 return eventService.delete( resource.getId() );
+            case DATA_VALUE_SET:
+                throw new UnsupportedOperationException( "Deleting DHIS2 DataValueSet resources is nut supported." );
             default:
-                throw new AssertionError( "Unhandled DHIS resource type: " + resource.getResourceType() );
+                throw new AssertionError( "Unhandled DHIS2 resource type: " + resource.getResourceType() );
         }
     }
 
@@ -185,7 +205,7 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
     {
         boolean updated = false;
 
-        if ( (event.getTrackedEntityInstance() != null) && event.getTrackedEntityInstance().isModified() )
+        if ( event.getTrackedEntityInstance() != null && event.getTrackedEntityInstance().isModified() )
         {
             logger.debug( "Persisting tracked entity instance." );
             trackedEntityService.createOrUpdate( event.getTrackedEntityInstance() );
@@ -193,21 +213,24 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
             updated = true;
         }
 
-        if ( event.getEnrollment().isNewResource() )
+        final Enrollment enrollment = event.getEnrollment();
+
+        if ( enrollment != null && enrollment.isNewResource() )
         {
             logger.info( "Creating new enrollment." );
-            event.getEnrollment().setEvents( Collections.singletonList( event ) );
-            enrollmentService.create( event.getEnrollment() );
-            logger.info( "Created new enrollment {} with new event.", event.getEnrollment().getId(), event.getId() );
+            enrollment.setEvents( Collections.singletonList( event ) );
+            enrollmentService.createOrUpdate( enrollment );
+            logger.info( "Created new enrollment {} with new event {}.", enrollment.getId(), event.getId() );
             updated = true;
         }
         else
         {
-            final List<Event> events = event.getEnrollment().getEvents();
-            if ( event.getEnrollment().isModified() )
+            final List<Event> events = enrollment == null ? Collections.singletonList( event ) : enrollment.getEvents();
+
+            if ( enrollment != null && enrollment.isModified() )
             {
                 logger.info( "Updating existing enrollment." );
-                event.setEnrollment( enrollmentService.update( event.getEnrollment() ) );
+                event.setEnrollment( enrollmentService.createOrUpdate( event.getEnrollment() ) );
                 logger.info( "Updated existing enrollment {}.", event.getEnrollment().getId() );
                 updated = true;
             }
@@ -226,35 +249,68 @@ public class DhisResourceRepositoryImpl implements DhisResourceRepository
 
         return updated;
     }
-    
-    private boolean saveEnrollment( @Nonnull Enrollment enrollment)
+
+    private boolean saveEnrollment( @Nonnull Enrollment enrollment )
     {
         boolean updated = false;
 
-        if ( (enrollment.getTrackedEntityInstance() != null) && enrollment.getTrackedEntityInstance().isModified() )
+        if ( enrollment.getTrackedEntityInstance() != null && enrollment.getTrackedEntityInstance().isModified() )
         {
-            logger.debug( "Persisting tracked entity instance." );
+            logger.debug( "Persisting enrollment." );
             trackedEntityService.createOrUpdate( enrollment.getTrackedEntityInstance() );
-            logger.info( "Persisted tracked entity instance {}.", enrollment.getTrackedEntityInstance().getId() );
+            logger.info( "Persisted enrollment {}.", enrollment.getTrackedEntityInstance().getId() );
             updated = true;
         }
 
-        if (enrollment.isNewResource() )
+        if ( enrollment.isNewResource() )
         {
             logger.info( "Creating new enrollment." );
-            enrollmentService.create( enrollment );
-            logger.info( "Created new enrollment {}.", enrollment.getId());
+            enrollmentService.createOrUpdate( enrollment );
+            logger.info( "Created new enrollment {}.", enrollment.getId() );
             updated = true;
         }
-        else  if ( enrollment.isModified() )
+        else if ( enrollment.isModified() )
         {
-                logger.info( "Updating existing enrollment." );
-                enrollmentService.update(enrollment);
-                logger.info( "Updated existing enrollment {}.", enrollment.getId() );
-                updated = true;
+            logger.info( "Updating existing enrollment." );
+            enrollmentService.createOrUpdate( enrollment );
+            logger.info( "Updated existing enrollment {}.", enrollment.getId() );
+            updated = true;
         }
-        
+
 
         return updated;
+    }
+
+    private boolean saveDataValueSet( @Nonnull DataValueSet dataValueSet )
+    {
+        if ( validateDataValueSet( dataValueSet ) )
+        {
+            if ( dataValueSet.isNewResource() )
+            {
+                logger.info( "Creating new DataValueSet." );
+                dataValueSetService.createOrUpdate( dataValueSet );
+                logger.info( "Created new DataValueSet for dataSetId: {}, orgUnit: {}, period: {}.",
+                    dataValueSet.getDataSetId(), dataValueSet.getOrgUnitId(), dataValueSet.getPeriod() );
+                return true;
+            }
+            else if ( dataValueSet.isModified() )
+            {
+                logger.info( "Updating existing DataValueSet." );
+                dataValueSetService.createOrUpdate( dataValueSet );
+                logger.info( "Created new DataValueSet for dataSetId: {}, orgUnit: {}, period: {}.",
+                    dataValueSet.getDataSetId(), dataValueSet.getOrgUnitId(), dataValueSet.getPeriod() );
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean validateDataValueSet( @Nonnull DataValueSet dataValueSet )
+    {
+        return dataValueSet.getDataSetId() != null && !dataValueSet.getDataSetId().isEmpty() &&
+            dataValueSet.getOrgUnitId() != null && !dataValueSet.getOrgUnitId().isEmpty() &&
+            dataValueSet.getPeriod() != null && !dataValueSet.getPeriod().isEmpty() &&
+            dataValueSet.getDataValues() != null && !dataValueSet.getDataValues().isEmpty();
     }
 }

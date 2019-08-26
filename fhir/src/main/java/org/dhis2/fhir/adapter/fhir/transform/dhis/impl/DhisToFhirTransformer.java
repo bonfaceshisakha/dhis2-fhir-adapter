@@ -44,13 +44,13 @@ import javax.annotation.Nullable;
 import java.util.Map;
 
 /**
- * Transforms a DHIS 2 resource to a FHIR resource.
+ * Transforms a DHIS2 resource to a FHIR resource.
  *
- * @param <R> the concrete type of the DHIS 2 resource that is processed by this transformer.
+ * @param <R> the concrete type of the DHIS2 resource that is processed by this transformer.
  * @param <U> the concrete type of the transformer rule that is processed by this transformer.
  * @author volsch
  */
-public interface DhisToFhirTransformer<R extends ScriptedDhisResource, U extends AbstractRule> extends FhirVersionRestricted
+public interface DhisToFhirTransformer<R extends ScriptedDhisResource, U extends AbstractRule> extends FhirVersionRestricted, Comparable<DhisToFhirTransformer<?, ?>>
 {
     @Nonnull
     DhisResourceType getDhisResourceType();
@@ -60,6 +60,11 @@ public interface DhisToFhirTransformer<R extends ScriptedDhisResource, U extends
 
     @Nonnull
     Class<U> getRuleClass();
+
+    /**
+     * @return the priority of this transformer (matching transformers with a higher priority are used first).
+     */
+    int getPriority();
 
     @Nullable
     DhisToFhirTransformOutcome<? extends IBaseResource> transform( @Nonnull FhirClient fhirClient, @Nonnull DhisToFhirTransformerContext context, @Nonnull R input, @Nonnull RuleInfo<U> ruleInfo,

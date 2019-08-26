@@ -44,7 +44,7 @@ import java.util.UUID;
 
 /**
  * The request that has caused the transformation between the FHIR resource
- * and the DHIS 2 resource.
+ * and the DHIS2 resource.
  *
  * @author volsch
  */
@@ -97,6 +97,9 @@ public interface FhirRequest
     String getFhirClientCode();
 
     boolean isSync();
+
+    @Nullable
+    UUID getFhirClientId();
 
     @Nullable
     UUID getFhirClientResourceId();

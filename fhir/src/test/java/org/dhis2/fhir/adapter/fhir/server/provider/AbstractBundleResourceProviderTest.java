@@ -32,7 +32,10 @@ import ca.uhn.fhir.context.FhirVersionEnum;
 import ca.uhn.fhir.model.primitive.IdDt;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
+import org.dhis2.fhir.adapter.cache.RequestCacheContext;
 import org.dhis2.fhir.adapter.cache.RequestCacheService;
+import org.dhis2.fhir.adapter.dhis.local.LocalDhisResourceRepositoryContainer;
+import org.dhis2.fhir.adapter.dhis.local.LocalDhisResourceRepositoryTemplate;
 import org.dhis2.fhir.adapter.fhir.metadata.model.FhirClient;
 import org.dhis2.fhir.adapter.fhir.metadata.model.FhirClientResource;
 import org.dhis2.fhir.adapter.fhir.metadata.model.FhirClientSystem;
@@ -70,11 +73,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.dhis2.fhir.adapter.fhir.metadata.model.FhirClient.FHIR_REST_INTERFACE_DSTU3_ID;
 
 /**
- * Unit tests for {@link AbstractBundleResourceProviderTest}.
+ * Unit tests for {@link AbstractBundleResourceProvider}.
  *
  * @author volsch
  */
@@ -107,6 +111,9 @@ public class AbstractBundleResourceProviderTest
     private IBaseResource baseResource6;
 
     @Mock
+    private IBaseResource baseResource7;
+
+    @Mock
     private FhirClientResourceRepository fhirClientResourceRepository;
 
     @Mock
@@ -120,6 +127,9 @@ public class AbstractBundleResourceProviderTest
 
     @Mock
     private RequestCacheService requestCacheService;
+
+    @Mock
+    private RequestCacheContext requestCacheContext;
 
     @Mock
     private RequestDetails requestDetails;
@@ -160,7 +170,15 @@ public class AbstractBundleResourceProviderTest
     @Test
     public void processInternal() throws Exception
     {
+        final AtomicReference<LocalDhisResourceRepositoryContainer> repositoryContainerReference = new AtomicReference<>();
+
         Mockito.when( bundleResourceProvider.getFhirVersion() ).thenReturn( FhirVersion.DSTU3 );
+        Mockito.when( requestCacheService.createRequestCacheContext() ).thenReturn( requestCacheContext );
+        Mockito.doAnswer( invocation -> {
+            repositoryContainerReference.set( invocation.getArgument( 1 ) );
+
+            return null;
+        } ).when( requestCacheContext ).setAttribute( Mockito.eq( LocalDhisResourceRepositoryTemplate.CONTAINER_REQUEST_CACHE_ATTRIBUTE_NAME ), Mockito.any() );
 
         final FhirOperation invalidDeleteOperation = new FhirOperation( FhirOperationType.DELETE, FhirResourceType.PATIENT, null, null, null, null );
         invalidDeleteOperation.getResult().badRequest( "Invalid data included" );
@@ -172,20 +190,22 @@ public class AbstractBundleResourceProviderTest
         invalidPutOperation.getResult().badRequest( "Invalid data included" );
 
         final List<FhirOperation> operations = new ArrayList<>();
-        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, "te-ldXIdLNUNE1-d0e1472a05e647c9b36bff1f06fec351", baseResource1, null ) );
-        operations.add( new FhirOperation( FhirOperationType.DELETE, FhirResourceType.PATIENT, patientClientResource, "te-ldXIdLNUNE4-d0e1472a05e647c9b36bff1f06fec354", null, null ) );
+        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, "ldXIdLNUNE1", baseResource1, null ) );
+        operations.add( new FhirOperation( FhirOperationType.DELETE, FhirResourceType.PATIENT, patientClientResource, "ldXIdLNUNE4", null, null ) );
         operations.add( new FhirOperation( FhirOperationType.POST, FhirResourceType.OBSERVATION, observationClientResource, null, baseResource2, null ) );
-        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, "te-ldXIdLNUNE2-d0e1472a05e647c9b36bff1f06fec352", baseResource3,
+        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, "ldXIdLNUNE2", baseResource3,
             new URI( "Patient?identifier=http%3A%2F%2Ftest.com%2Fpatient%7C8972" ) ) );
         operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, null, baseResource4,
             new URI( "Patient?identifier=http%3A%2F%2Ftest.com%2Fpatient%7C8973" ) ) );
-        operations.add( new FhirOperation( FhirOperationType.DELETE, FhirResourceType.PATIENT, patientClientResource, "te-ldXIdLNUNE2-d0e1472a05e647c9b36bff1f06fec352", null, null ) );
-        operations.add( new FhirOperation( FhirOperationType.POST, FhirResourceType.PATIENT, patientClientResource, "te-ldXIdLNUN12-d0e1472a05e647c9b36bff1f06fec312", baseResource5, null ) );
-        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, "te-ldXIdLNUN22-d0e1472a05e647c9b36bff1f06fec322", baseResource6, null ) );
+        operations.add( new FhirOperation( FhirOperationType.DELETE, FhirResourceType.PATIENT, patientClientResource, "ldXIdLNUNE2", null, null ) );
+        operations.add( new FhirOperation( FhirOperationType.POST, FhirResourceType.PATIENT, patientClientResource, "ldXIdLNUN12", baseResource5, null ) );
+        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, "ldXIdLNUN22", baseResource6, null ) );
 
         operations.add( invalidDeleteOperation );
         operations.add( invalidPostOperation );
         operations.add( invalidPutOperation );
+
+        operations.add( new FhirOperation( FhirOperationType.PUT, FhirResourceType.PATIENT, patientClientResource, null, baseResource7, null ) );
 
         final FhirBatchRequest batchRequest = new FhirBatchRequest( operations, false );
 
@@ -196,21 +216,23 @@ public class AbstractBundleResourceProviderTest
         Mockito.when( bundleResourceProvider.createBatchResponse( Mockito.same( batchRequest ) ) ).thenReturn( resultBaseBundle );
 
         Mockito.when( fhirRepository.save( Mockito.same( patientClientResource ), Mockito.same( baseResource1 ), Mockito.eq( new FhirRepositoryOperation( FhirRepositoryOperationType.UPDATE ) ) ) )
-            .thenReturn( new FhirRepositoryOperationOutcome( "te-ldXIdLNUNE1-d0e1472a05e647c9b36bff1f06fec351" ) );
-        Mockito.when( fhirRepository.delete( Mockito.same( patientClientResource ), Mockito.eq( DhisFhirResourceId.parse( "te-ldXIdLNUNE4-d0e1472a05e647c9b36bff1f06fec354" ) ) ) )
+            .thenReturn( new FhirRepositoryOperationOutcome( "ldXIdLNUNE1", false ) );
+        Mockito.when( fhirRepository.delete( Mockito.same( patientClientResource ), Mockito.eq( DhisFhirResourceId.parse( "ldXIdLNUNE4" ) ) ) )
             .thenReturn( true );
         Mockito.when( fhirRepository.save( Mockito.same( observationClientResource ), Mockito.same( baseResource2 ), Mockito.eq( new FhirRepositoryOperation( FhirRepositoryOperationType.CREATE ) ) ) )
-            .thenReturn( new FhirRepositoryOperationOutcome( "te-ldXIdLNUNE9-d0e1472a05e647c9b36bff1f06fec359" ) );
+            .thenReturn( new FhirRepositoryOperationOutcome( "ldXIdLNUNE9", true ) );
         Mockito.when( dhisRepository.readByIdentifier( Mockito.same( patientClientResource.getFhirClient() ), Mockito.eq( FhirResourceType.PATIENT ), Mockito.eq( "8972" ) ) )
             .thenReturn( Optional.empty() );
         Mockito.when( fhirRepository.save( Mockito.same( patientClientResource ), Mockito.same( baseResource3 ), Mockito.eq( new FhirRepositoryOperation( FhirRepositoryOperationType.CREATE ) ) ) )
-            .thenReturn( new FhirRepositoryOperationOutcome( "te-ldXIdLNUNE8-d0e1472a05e647c9b36bff1f06fec358" ) );
-        Mockito.when( baseResource4.getIdElement() ).thenReturn( new IdDt( "te-ldXIdLNUNE7-d0e1472a05e647c9b36bff1f06fec357" ) );
+            .thenReturn( new FhirRepositoryOperationOutcome( "ldXIdLNUNE8", true ) );
+        Mockito.when( baseResource4.getIdElement() ).thenReturn( new IdDt( "ldXIdLNUNE7" ) );
         Mockito.when( dhisRepository.readByIdentifier( Mockito.same( patientClientResource.getFhirClient() ), Mockito.eq( FhirResourceType.PATIENT ), Mockito.eq( "8973" ) ) )
             .thenReturn( Optional.of( baseResource4 ) );
         Mockito.when( fhirRepository.save( Mockito.same( patientClientResource ), Mockito.same( baseResource4 ), Mockito.eq( new FhirRepositoryOperation( FhirRepositoryOperationType.UPDATE ) ) ) )
-            .thenReturn( new FhirRepositoryOperationOutcome( "te-ldXIdLNUNE4-d0e1472a05e647c9b36bff1f06fec354" ) );
-        Mockito.when( fhirRepository.delete( Mockito.same( patientClientResource ), Mockito.eq( DhisFhirResourceId.parse( "te-ldXIdLNUNE2-d0e1472a05e647c9b36bff1f06fec352" ) ) ) )
+            .thenReturn( new FhirRepositoryOperationOutcome( "ldXIdLNUNE4", false ) );
+        Mockito.when( fhirRepository.save( Mockito.same( patientClientResource ), Mockito.same( baseResource7 ), Mockito.eq( new FhirRepositoryOperation( FhirRepositoryOperationType.CREATE_OR_UPDATE ) ) ) )
+            .thenReturn( new FhirRepositoryOperationOutcome( "lxXIdLNUNE4", false ) );
+        Mockito.when( fhirRepository.delete( Mockito.same( patientClientResource ), Mockito.eq( DhisFhirResourceId.parse( "ldXIdLNUNE2" ) ) ) )
             .thenReturn( false );
 
         Assert.assertSame( resultBaseBundle, bundleResourceProvider.processInternal( requestDetails, baseBundle ) );
@@ -225,11 +247,11 @@ public class AbstractBundleResourceProviderTest
 
         Assert.assertNull( operations.get( 2 ).getResult().getIssue() );
         Assert.assertEquals( FhirOperationResult.CREATED_STATUS_CODE, operations.get( 2 ).getResult().getStatusCode() );
-        Assert.assertEquals( new IdDt( "te-ldXIdLNUNE9-d0e1472a05e647c9b36bff1f06fec359" ), operations.get( 2 ).getResult().getId() );
+        Assert.assertEquals( new IdDt( "ldXIdLNUNE9" ), operations.get( 2 ).getResult().getId() );
 
         Assert.assertNull( operations.get( 3 ).getResult().getIssue() );
         Assert.assertEquals( FhirOperationResult.CREATED_STATUS_CODE, operations.get( 3 ).getResult().getStatusCode() );
-        Assert.assertEquals( new IdDt( "te-ldXIdLNUNE8-d0e1472a05e647c9b36bff1f06fec358" ), operations.get( 3 ).getResult().getId() );
+        Assert.assertEquals( new IdDt( "ldXIdLNUNE8" ), operations.get( 3 ).getResult().getId() );
 
         Assert.assertNull( operations.get( 4 ).getResult().getIssue() );
         Assert.assertEquals( FhirOperationResult.OK_STATUS_CODE, operations.get( 4 ).getResult().getStatusCode() );
@@ -253,12 +275,21 @@ public class AbstractBundleResourceProviderTest
 
         Assert.assertNotNull( operations.get( 10 ).getResult().getIssue() );
         Assert.assertThat( operations.get( 10 ).getResult().getIssue().toString(), Matchers.containsString( "Invalid data included" ) );
+
+        Assert.assertNull( operations.get( 11 ).getResult().getIssue() );
+        Assert.assertEquals( FhirOperationResult.OK_STATUS_CODE, operations.get( 11 ).getResult().getStatusCode() );
+        Assert.assertEquals( new IdDt( "lxXIdLNUNE4" ), operations.get( 11 ).getResult().getId() );
+
+        Assert.assertNotNull( repositoryContainerReference.get() );
+        Mockito.verify( requestCacheContext, Mockito.times( 9 ) ).setAttribute( Mockito.eq( LocalDhisResourceRepositoryTemplate.RESOURCE_KEY_REQUEST_CACHE_ATTRIBUTE_NAME ),
+            Mockito.any( FhirOperation.class ) );
     }
 
     @Test
     public void processInternalReferenceNotFound() throws Exception
     {
         Mockito.when( bundleResourceProvider.getFhirVersion() ).thenReturn( FhirVersion.DSTU3 );
+        Mockito.when( requestCacheService.createRequestCacheContext() ).thenReturn( requestCacheContext );
 
         final List<FhirOperation> operations = new ArrayList<>();
         operations.add( new FhirOperation( FhirOperationType.DELETE, FhirResourceType.PATIENT, patientClientResource, null, null,
@@ -291,7 +322,7 @@ public class AbstractBundleResourceProviderTest
         Assert.assertFalse( fhirOperation.isProcessed() );
         Assert.assertEquals( FhirOperationType.DELETE, fhirOperation.getOperationType() );
         Assert.assertEquals( FhirResourceType.PATIENT, fhirOperation.getFhirResourceType() );
-        Assert.assertEquals( "4711", fhirOperation.getResourceId() );
+        Assert.assertEquals( "4811", fhirOperation.getResourceId() );
     }
 
     @Test
@@ -411,20 +442,6 @@ public class AbstractBundleResourceProviderTest
         Assert.assertTrue( fhirOperation.isProcessed() );
         Assert.assertEquals( FhirOperationResult.BAD_REQUEST_STATUS_CODE, fhirOperation.getResult().getStatusCode() );
         Assert.assertEquals( FhirOperationType.POST, fhirOperation.getOperationType() );
-    }
-
-    @Test
-    public void createOperationPutWithoutIdReference()
-    {
-        Mockito.when( bundleResourceProvider.getFhirVersion() ).thenReturn( FhirVersion.DSTU3 );
-        Mockito.when( fhirClientResourceRepository.findFirstCached( Mockito.eq( fhirClient.getId() ), Mockito.eq( FhirResourceType.PATIENT ) ) )
-            .thenReturn( Optional.of( patientClientResource ) );
-
-        final FhirOperation fhirOperation = bundleResourceProvider.createOperation( null, new Patient(), "put", null );
-
-        Assert.assertTrue( fhirOperation.isProcessed() );
-        Assert.assertEquals( FhirOperationResult.BAD_REQUEST_STATUS_CODE, fhirOperation.getResult().getStatusCode() );
-        Assert.assertEquals( FhirOperationType.PUT, fhirOperation.getOperationType() );
     }
 
     @Test

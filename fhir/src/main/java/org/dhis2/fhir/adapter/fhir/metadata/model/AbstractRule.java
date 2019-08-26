@@ -69,7 +69,8 @@ import java.util.List;
 /**
  * A rule defines a business rules and transformations from a FHIR resource to a DHIS2 resource and vice versa.
  *
- * @author volsch, Charles Chigoriwa
+ * @author volsch
+ * @author Charles Chigoriwa (ITINORDIC)
  */
 @Entity( name = "AbstractRule" )
 @Table( name = "fhir_rule" )
@@ -83,6 +84,9 @@ import java.util.List;
             "AND r.impEnabled=true AND (r.applicableCodeSet IS NULL OR (r.applicableCodeSet IS NOT NULL AND EXISTS " +
             "(SELECT 1 FROM CodeSetValue csv JOIN csv.code c ON c.enabled=true JOIN c.systemCodes sc ON sc.enabled=true AND " +
             "sc.systemCodeValue IN (:systemCodeValues) JOIN sc.system s ON s.enabled=true WHERE csv.codeSet=r.applicableCodeSet AND csv.enabled=true)))" ),
+    @NamedQuery( name = AbstractRule.FIND_IMP_RULES_BY_FHIR_TYPE_CODE_SETS_NAMED_QUERY, query =
+        "SELECT r FROM AbstractRule r JOIN r.applicableCodeSet acs WHERE r.fhirResourceType=:fhirResourceType AND r.enabled=true " +
+            "AND r.impEnabled=true AND acs.code IN (:codeSetCodes)" ),
     @NamedQuery( name = AbstractRule.FIND_EXP_RULES_BY_FHIR_TYPE_NAMED_QUERY, query = "SELECT r FROM AbstractRule r " +
         "WHERE r.fhirResourceType=:fhirResourceType AND r.enabled=true AND r.expEnabled=true" ),
     @NamedQuery( name = AbstractRule.FIND_EXP_RULES_BY_FHIR_TYPE_CODES_NAMED_QUERY, query =
@@ -90,6 +94,9 @@ import java.util.List;
             "AND r.expEnabled=true AND (r.applicableCodeSet IS NULL OR (r.applicableCodeSet IS NOT NULL AND EXISTS " +
             "(SELECT 1 FROM CodeSetValue csv JOIN csv.code c ON c.enabled=true JOIN c.systemCodes sc ON sc.enabled=true AND " +
             "sc.systemCodeValue IN (:systemCodeValues) JOIN sc.system s ON s.enabled=true WHERE csv.codeSet=r.applicableCodeSet AND csv.enabled=true)))" ),
+    @NamedQuery( name = AbstractRule.FIND_EXP_RULES_BY_FHIR_TYPE_CODE_SETS_NAMED_QUERY, query =
+        "SELECT r FROM AbstractRule r JOIN r.applicableCodeSet acs WHERE r.fhirResourceType=:fhirResourceType AND r.enabled=true " +
+            "AND r.expEnabled=true AND acs.code IN (:codeSetCodes)" ),
     @NamedQuery( name = AbstractRule.FIND_IMP_RULE_BY_ID_NAMED_QUERY, query =
         "SELECT r FROM AbstractRule r WHERE r.fhirResourceType=:fhirResourceType AND TYPE(r)=:dhisResourceType AND r.id=:ruleId AND r.enabled=true AND r.impEnabled=true" )
 } )
@@ -98,7 +105,10 @@ import java.util.List;
     @JsonSubTypes.Type( value = TrackedEntityRule.class, name = "TRACKED_ENTITY" ),
     @JsonSubTypes.Type( value = ProgramStageRule.class, name = "PROGRAM_STAGE_EVENT" ),
     @JsonSubTypes.Type( value = OrganizationUnitRule.class, name = "ORGANIZATION_UNIT" ),
-    @JsonSubTypes.Type( value = EnrollmentRule.class, name = "ENROLLMENT" )
+    @JsonSubTypes.Type( value = EnrollmentRule.class, name = "ENROLLMENT" ),
+    @JsonSubTypes.Type( value = ProgramMetadataRule.class, name = "PROGRAM_METADATA" ),
+    @JsonSubTypes.Type( value = ProgramStageMetadataRule.class, name = "PROGRAM_STAGE_METADATA" ),
+    @JsonSubTypes.Type( value = DataValueSetRule.class, name = "DATA_VALUE_SET" )
 } )
 @JsonFilter( value = AdapterBeanPropertyFilter.FILTER_NAME )
 public abstract class AbstractRule extends VersionedBaseMetadata implements Serializable, Comparable<AbstractRule>, NamedMetadata
@@ -109,9 +119,13 @@ public abstract class AbstractRule extends VersionedBaseMetadata implements Seri
 
     public static final String FIND_IMP_RULES_BY_FHIR_TYPE_CODES_NAMED_QUERY = "AbstractRule.findImpByFhirTypeAndCodes";
 
+    public static final String FIND_IMP_RULES_BY_FHIR_TYPE_CODE_SETS_NAMED_QUERY = "AbstractRule.findImpByFhirTypeAndCodeSets";
+
     public static final String FIND_EXP_RULES_BY_FHIR_TYPE_NAMED_QUERY = "AbstractRule.findExpByFhirType";
 
     public static final String FIND_EXP_RULES_BY_FHIR_TYPE_CODES_NAMED_QUERY = "AbstractRule.findExpByFhirTypeAndCodes";
+
+    public static final String FIND_EXP_RULES_BY_FHIR_TYPE_CODE_SETS_NAMED_QUERY = "AbstractRule.findExpByFhirTypeAndCodeSets";
 
     public static final String FIND_IMP_RULE_BY_ID_NAMED_QUERY = "AbstractRule.findImpById";
 
@@ -162,6 +176,8 @@ public abstract class AbstractRule extends VersionedBaseMetadata implements Seri
     private boolean containedAllowed;
 
     private boolean grouping;
+
+    private boolean simpleFhirId;
 
     private List<RuleDhisDataReference> dhisDataReferences;
 
@@ -415,6 +431,17 @@ public abstract class AbstractRule extends VersionedBaseMetadata implements Seri
         this.grouping = grouping;
     }
 
+    @Column( name = "simple_fhir_id", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE NOT NULL" )
+    public boolean isSimpleFhirId()
+    {
+        return simpleFhirId;
+    }
+
+    public void setSimpleFhirId( boolean simpleFhirId )
+    {
+        this.simpleFhirId = simpleFhirId;
+    }
+
     @JsonCacheIgnore
     @OneToMany( mappedBy = "rule", orphanRemoval = true, cascade = CascadeType.ALL )
     @BatchSize( size = 100 )
@@ -454,10 +481,12 @@ public abstract class AbstractRule extends VersionedBaseMetadata implements Seri
     public int compareTo( @Nonnull AbstractRule o )
     {
         int value = o.getEvaluationOrder() - getEvaluationOrder();
+
         if ( value != 0 )
         {
             return value;
         }
+
         return getId().compareTo( o.getId() );
     }
 

@@ -45,14 +45,20 @@ import javax.annotation.Nullable;
 public interface CustomFhirDhisAssignmentRepository
 {
     @Nullable
-    String findFirstDhisResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient subscription, @Nonnull IIdType fhirResourceId );
+    String findFirstDhisResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient fhirClient, @Nonnull IIdType fhirResourceId );
 
     @Nullable
-    String findFirstFhirResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient subscription, @Nonnull DhisResourceId dhisResourceId );
+    String findFirstDhisResourceId( @Nonnull FhirClient fhirClient, @Nonnull IIdType fhirResourceId );
 
-    boolean saveDhisResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient subscription, @Nonnull IIdType fhirResourceId, @Nonnull DhisResourceId dhisResourceId );
+    @Nullable
+    String findFirstFhirResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient fhirClient, @Nonnull DhisResourceId dhisResourceId );
 
-    boolean saveFhirResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient subscription, @Nonnull DhisResourceId dhisResourceId, @Nonnull IIdType fhirResourceId );
+    @Nullable
+    String findFirstFhirResourceId( @Nonnull FhirClient fhirClient, @Nonnull DhisResourceId dhisResourceId );
 
-    boolean deleteFhirResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient subscription, @Nonnull IIdType fhirResourceId );
+    boolean saveDhisResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient fhirClient, @Nonnull IIdType fhirResourceId, @Nonnull DhisResourceId dhisResourceId );
+
+    boolean saveFhirResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient fhirClient, @Nonnull DhisResourceId dhisResourceId, @Nonnull IIdType fhirResourceId );
+
+    boolean deleteFhirResourceId( @Nonnull AbstractRule rule, @Nonnull FhirClient fhirClient, @Nonnull IIdType fhirResourceId );
 }

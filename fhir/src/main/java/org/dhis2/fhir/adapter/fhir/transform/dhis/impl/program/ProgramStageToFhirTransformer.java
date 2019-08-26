@@ -29,6 +29,7 @@ package org.dhis2.fhir.adapter.fhir.transform.dhis.impl.program;
  */
 
 import org.apache.commons.lang3.StringUtils;
+import org.dhis2.fhir.adapter.converter.ConversionException;
 import org.dhis2.fhir.adapter.dhis.model.DhisResourceType;
 import org.dhis2.fhir.adapter.fhir.data.repository.FhirDhisAssignmentRepository;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ExecutableScript;
@@ -40,6 +41,7 @@ import org.dhis2.fhir.adapter.fhir.metadata.model.RuleInfo;
 import org.dhis2.fhir.adapter.fhir.metadata.model.ScriptVariable;
 import org.dhis2.fhir.adapter.fhir.metadata.repository.FhirResourceMappingRepository;
 import org.dhis2.fhir.adapter.fhir.metadata.repository.SystemRepository;
+import org.dhis2.fhir.adapter.fhir.model.FhirVersion;
 import org.dhis2.fhir.adapter.fhir.repository.FhirResourceRepository;
 import org.dhis2.fhir.adapter.fhir.repository.MissingDhisResourceException;
 import org.dhis2.fhir.adapter.fhir.script.ScriptExecutor;
@@ -49,6 +51,7 @@ import org.dhis2.fhir.adapter.fhir.transform.dhis.DhisToFhirTransformOutcome;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.DhisToFhirTransformerContext;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.impl.AbstractDhisToFhirTransformer;
 import org.dhis2.fhir.adapter.fhir.transform.dhis.impl.DhisToFhirTransformer;
+import org.dhis2.fhir.adapter.fhir.transform.dhis.impl.util.AbstractCodeDhisToFhirTransformerUtils;
 import org.dhis2.fhir.adapter.fhir.transform.scripted.ScriptedEvent;
 import org.dhis2.fhir.adapter.fhir.transform.scripted.ScriptedTrackedEntityInstance;
 import org.dhis2.fhir.adapter.fhir.transform.util.TransformerUtils;
@@ -65,9 +68,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Implementation of {@link DhisToFhirTransformer} for transforming DHIS 2
+ * Implementation of {@link DhisToFhirTransformer} for transforming DHIS2
  * program stage based events.
  *
  * @author volsch
@@ -84,6 +88,13 @@ public class ProgramStageToFhirTransformer extends AbstractDhisToFhirTransformer
     {
         super( scriptExecutor, lockManager, systemRepository, fhirResourceRepository, fhirDhisAssignmentRepository );
         this.resourceMappingRepository = resourceMappingRepository;
+    }
+
+    @Nonnull
+    @Override
+    public Set<FhirVersion> getFhirVersions()
+    {
+        return FhirVersion.ALL;
     }
 
     @Nonnull
@@ -113,13 +124,20 @@ public class ProgramStageToFhirTransformer extends AbstractDhisToFhirTransformer
         @Nonnull FhirClient fhirClient, @Nonnull DhisToFhirTransformerContext context, @Nonnull ScriptedEvent input,
         @Nonnull RuleInfo<ProgramStageRule> ruleInfo, @Nonnull Map<String, Object> scriptVariables ) throws TransformerException
     {
+        if ( ruleInfo.getRule().getProgramStage() == null )
+        {
+            return null;
+        }
+
         final Map<String, Object> variables = new HashMap<>( scriptVariables );
+
         if ( !addScriptVariables( variables, input ) )
         {
             return null;
         }
 
         final FhirResourceMapping resourceMapping = getResourceMapping( ruleInfo );
+
         if ( isDataAbsent( context, input, ruleInfo ) )
         {
             return handleDataAbsent( fhirClient, context, ruleInfo, resourceMapping, variables );
@@ -128,20 +146,24 @@ public class ProgramStageToFhirTransformer extends AbstractDhisToFhirTransformer
         final IBaseResource trackedEntityFhirResource = getTrackedEntityFhirResource( fhirClient, context,
             new RuleInfo<>( ruleInfo.getRule().getProgramStage().getProgram().getTrackedEntityRule(), Collections.emptyList() ),
             ruleInfo.getRule().getProgramStage().getProgram().getTrackedEntityFhirResourceType(),
-            Objects.requireNonNull( input.getTrackedEntityInstance() ), variables )
-            .orElseThrow( () -> new MissingDhisResourceException( Objects.requireNonNull( input.getTrackedEntityInstance().getResourceId() ) ) );
+            Objects.requireNonNull( input.getTrackedEntityInstance() ), variables ).orElseThrow(
+            () -> new MissingDhisResourceException( Objects.requireNonNull( input.getTrackedEntityInstance().getResourceId() ) ) );
         variables.put( ScriptVariable.TEI_FHIR_RESOURCE.getVariableName(), trackedEntityFhirResource );
 
         final IBaseResource resource = getResource( fhirClient, context, ruleInfo, variables ).orElse( null );
+
         if ( resource == null )
         {
             return null;
         }
+
         final IBaseResource modifiedResource = cloneToModified( context, ruleInfo, resource, variables );
+
         if ( modifiedResource == null )
         {
             return null;
         }
+
         variables.put( ScriptVariable.OUTPUT.getVariableName(), modifiedResource );
 
         if ( isDataDelete( context, ruleInfo, resourceMapping, variables ) )
@@ -149,58 +171,40 @@ public class ProgramStageToFhirTransformer extends AbstractDhisToFhirTransformer
             return handleDataDelete( fhirClient, context, ruleInfo, resourceMapping, modifiedResource, variables );
         }
 
+        if ( !transformFhirResourceType( context, ruleInfo, variables, resourceMapping, input, modifiedResource ) )
+        {
+            return null;
+        }
+
         if ( context.getDhisRequest().isCompleteTransformation() )
         {
-            if ( (resourceMapping.getExpStatusTransformScript() != null) &&
-                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpStatusTransformScript(), variables, Boolean.class ) ) )
-            {
-                logger.info( "Resulting DHIS status could not be transformed into FHIR resource {} with type {}.",
-                    trackedEntityFhirResource.getIdElement().toUnqualifiedVersionless(), resourceMapping.getFhirResourceType() );
-                return null;
-            }
-
-            if ( (resourceMapping.getExpTeiTransformScript() != null) &&
-                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpTeiTransformScript(), variables, Boolean.class ) ) )
-            {
-                logger.info( "Resulting DHIS TEI {} could not be transformed into FHIR resource {}.",
-                    trackedEntityFhirResource.getIdElement().toUnqualifiedVersionless(), resourceMapping.getFhirResourceType() );
-                return null;
-            }
-
-            if ( (resourceMapping.getExpOrgUnitTransformScript() != null) &&
-                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpOrgUnitTransformScript(), variables, Boolean.class ) ) )
-            {
-                logger.info( "DHIS Organization Unit {} could not be transformed into FHIR resource {}.",
-                    input.getOrganizationUnitId(), resourceMapping.getFhirResourceType() );
-                return null;
-            }
-
-            if ( (resourceMapping.getExpGeoTransformScript() != null) &&
-                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpGeoTransformScript(), variables, Boolean.class ) ) )
-            {
-                return null;
-            }
-
-            if ( (resourceMapping.getExpDateTransformScript() != null) &&
-                !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpDateTransformScript(), variables, Boolean.class ) ) )
-            {
-                logger.info( "Event date could not be transformed into FHIR resource {}.",
-                    resourceMapping.getFhirResourceType() );
-                return null;
-            }
+            TransformerUtils.getScriptVariable( scriptVariables, ScriptVariable.CODE_UTILS, AbstractCodeDhisToFhirTransformerUtils.class )
+                .setRuleCodeableConcept( ruleInfo, resource );
         }
+
         if ( (context.getDhisRequest().isCompleteTransformation() || context.isGrouping()) &&
             (resourceMapping.getExpGroupTransformScript() != null) &&
             !Boolean.TRUE.equals( executeScript( context, ruleInfo, resourceMapping.getExpGroupTransformScript(), variables, Boolean.class ) ) )
         {
             logger.info( "Resulting grouping could not be transformed into FHIR resource {}.", resourceMapping.getFhirResourceType() );
+
             return null;
         }
 
-        if ( !transform( context, ruleInfo, variables ) )
+        try
         {
+            if ( !transform( context, ruleInfo, variables ) )
+            {
+                return null;
+            }
+        }
+        catch ( ConversionException e )
+        {
+            logger.warn( "Ignoring event {} for rule {} due to conversion error: {}", input.getId(), ruleInfo.getRule(), e.getMessage() );
+
             return null;
         }
+
         return createResult( context, ruleInfo, variables, resource, modifiedResource );
     }
 

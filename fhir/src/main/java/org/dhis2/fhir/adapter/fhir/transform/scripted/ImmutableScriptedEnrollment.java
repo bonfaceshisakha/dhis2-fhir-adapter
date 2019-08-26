@@ -28,10 +28,7 @@ package org.dhis2.fhir.adapter.fhir.transform.scripted;
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-import org.dhis2.fhir.adapter.dhis.model.DhisResourceId;
-import org.dhis2.fhir.adapter.dhis.model.DhisResourceType;
 import org.dhis2.fhir.adapter.dhis.model.ImmutableDhisObject;
-import org.dhis2.fhir.adapter.fhir.transform.TransformerException;
 import org.dhis2.fhir.adapter.geo.Location;
 import org.dhis2.fhir.adapter.scriptable.Scriptable;
 
@@ -39,7 +36,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.time.ZonedDateTime;
-import java.util.Objects;
 
 /**
  * Immutable scripted enrollment.
@@ -47,99 +43,46 @@ import java.util.Objects;
  * @author volsch
  */
 @Scriptable
-public class ImmutableScriptedEnrollment implements ScriptedEnrollment, ImmutableDhisObject, Serializable
+public class ImmutableScriptedEnrollment extends ImmutableScriptedDhisResource implements ScriptedEnrollment, ImmutableDhisObject, Serializable
 {
     private static final long serialVersionUID = 3106142635120155470L;
 
-    private final ScriptedEnrollment delegate;
-
-    public ImmutableScriptedEnrollment( @Nonnull ScriptedEnrollment delegate )
+    public ImmutableScriptedEnrollment( @Nonnull WritableScriptedEnrollment delegate )
     {
-        this.delegate = delegate;
+        super( delegate );
     }
 
-    @Override
-    public boolean isNewResource()
-    {
-        return delegate.isNewResource();
-    }
-
-    @Override
-    public boolean isDeleted()
-    {
-        return delegate.isDeleted();
-    }
-
-    @Override
-    @Nullable
-    public String getId()
-    {
-        return delegate.getId();
-    }
-
-    @Nullable
-    @Override
-    public DhisResourceId getResourceId()
-    {
-        return delegate.getResourceId();
-    }
-
-    @Override
     @Nonnull
-    public DhisResourceType getResourceType()
+    protected ScriptedEnrollment getInternalDelegate()
     {
-        return delegate.getResourceType();
-    }
-
-    @Nullable
-    @Override
-    public ZonedDateTime getLastUpdated()
-    {
-        return delegate.getLastUpdated();
-    }
-
-    @Override
-    @Nullable
-    public String getOrganizationUnitId()
-    {
-        return delegate.getOrganizationUnitId();
-    }
-
-    @Nullable
-    @Override
-    public ScriptedTrackedEntityInstance getTrackedEntityInstance()
-    {
-        if ( delegate.getTrackedEntityInstance() instanceof ImmutableDhisObject )
-        {
-            return delegate.getTrackedEntityInstance();
-        }
-        return new ImmutableScriptedTrackedEntityInstance( Objects.requireNonNull( delegate.getTrackedEntityInstance() ) );
+        return (ScriptedEnrollment) super.getDelegate();
     }
 
     @Override
     @Nullable
     public ZonedDateTime getEnrollmentDate()
     {
-        return delegate.getEnrollmentDate();
+        return getInternalDelegate().getEnrollmentDate();
     }
 
     @Override
     @Nullable
     public ZonedDateTime getIncidentDate()
     {
-        return delegate.getIncidentDate();
+        return getInternalDelegate().getIncidentDate();
     }
 
     @Override
     @Nullable
     public Location getCoordinate()
     {
-        return delegate.getCoordinate();
+        return getInternalDelegate().getCoordinate();
     }
 
+    @Nullable
     @Override
-    public void validate() throws TransformerException
+    public String getProgramId()
     {
-        delegate.validate();
+        return getInternalDelegate().getProgramId();
     }
 }

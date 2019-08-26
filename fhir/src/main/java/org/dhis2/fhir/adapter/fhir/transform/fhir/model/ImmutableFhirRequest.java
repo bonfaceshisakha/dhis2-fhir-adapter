@@ -42,7 +42,7 @@ import java.util.UUID;
 
 /**
  * The immutable request that has caused the transformation between the FHIR resource
- * and the DHIS 2 resource. This can be used by scripts safely.
+ * and the DHIS2 resource. This can be used by scripts safely.
  *
  * @author volsch
  */
@@ -145,6 +145,13 @@ public class ImmutableFhirRequest implements FhirRequest, Serializable
     public String getDhisUsername()
     {
         return delegate.getDhisUsername();
+    }
+
+    @Nullable
+    @Override
+    public UUID getFhirClientId()
+    {
+        return delegate.getFhirClientId();
     }
 
     @Nullable
