@@ -157,7 +157,12 @@ public class FhirRepositoryImpl implements FhirRepository
         // if no FHIR repository operation is specified, DHIS2 authorization has not yet been set
         if ( fhirRepositoryOperation == null )
         {
-            authorizationContext.setAuthorization( createAuthorization( fhirClientResource.getFhirClient() ) );
+            //Add by Charles Chigoriwa (ITINordic)
+            if(authorizationContext.getAuthorization().getAuthorization()==null)
+            {
+                authorizationContext.setAuthorization( createAuthorization( fhirClientResource.getFhirClient() ) );
+            }
+            
             try
             {
                 return saveRetriedWithoutTrackedEntityInstance( fhirClientResource, resource );
