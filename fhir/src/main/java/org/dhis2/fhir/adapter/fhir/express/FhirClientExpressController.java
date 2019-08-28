@@ -1,6 +1,5 @@
 package org.dhis2.fhir.adapter.fhir.express;
 
-
 import ca.uhn.fhir.context.FhirContext;
 import java.io.IOException;
 import java.util.Map;
@@ -57,8 +56,7 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
     private final FhirResourceExpressService fhirResourceExpressService;
 
-    private final @Nonnull
-    DhisEndpointConfig endpointConfig;
+    private final DhisEndpointConfig endpointConfig;
 
     public FhirClientExpressController(@Nonnull FhirClientResourceRepository resourceRepository, @Nonnull FhirClientRestHookProcessor processor,
             @Nonnull FhirResourceRepository fhirResourceRepository, @Nonnull Set<FhirContext> fhirContexts, FhirResourceExpressService fhirResourceExpressService, @Nonnull AuthorizationContext authorizationContext, @Nonnull DhisEndpointConfig endpointConfig) {
@@ -95,6 +93,21 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
         final FhirClientResource fhirClientResource = lookupFhirClientResource(fhirClientId, fhirResourceType, authorization);
         return processPayload(fhirClientResource, resourceType, resourceId, requestEntity, authorization);
+    }
+
+    //This method can be invoked to check whether both the adapter and dhis are running
+    @RequestMapping(path = "/authenticated", method = RequestMethod.GET)
+    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "Authorization", required = true) String authorization) {
+        try {
+            if (checkAuthorization(authorization)) {
+                return new ResponseEntity<>(HttpStatus.OK);
+            } else {
+                return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+            }
+        } catch (Exception ex) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
     }
 
     @Nonnull
