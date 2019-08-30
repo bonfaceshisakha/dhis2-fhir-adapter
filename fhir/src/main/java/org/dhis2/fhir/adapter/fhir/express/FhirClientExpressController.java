@@ -31,6 +31,7 @@ import org.dhis2.fhir.adapter.auth.AuthorizationContext;
 import org.dhis2.fhir.adapter.data.model.ProcessedItemInfo;
 import org.dhis2.fhir.adapter.dhis.config.DhisEndpointConfig;
 import org.dhis2.fhir.adapter.fhir.model.FhirVersion;
+import org.dhis2.fhir.adapter.fhir.repository.FhirRepositoryOperationOutcome;
 import org.dhis2.fhir.adapter.fhir.repository.FhirResource;
 import org.dhis2.fhir.adapter.fhir.util.FhirParserException;
 import org.dhis2.fhir.adapter.fhir.util.FhirParserUtils;
@@ -127,11 +128,15 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
         final MediaType mediaType = requestEntity.getHeaders().getContentType();
         final String fhirResource = new String(requestEntity.getBody(), getCharset(mediaType));
-        processPayload(fhirClientResource, (mediaType == null) ? null : mediaType.toString(), resourceType, resourceId, fhirResource, authorization);
-        return new ResponseEntity<>(HttpStatus.OK);
+        FhirRepositoryOperationOutcome outcome = processPayload(fhirClientResource, (mediaType == null) ? null : mediaType.toString(), resourceType, resourceId, fhirResource, authorization);
+        if (outcome != null) {
+            return new ResponseEntity<>(HttpStatus.OK);
+        } else {
+            return createBadRequestResponse("No operation outcome from FhirRepository");
+        }
     }
 
-    public void processPayload(@Nonnull FhirClientResource fhirClientResource, @Nullable String contentType, @Nonnull String fhirResourceType, @Nonnull String fhirResourceId, @Nonnull String fhirResource, @Nonnull String authorization) {
+    public FhirRepositoryOperationOutcome processPayload(@Nonnull FhirClientResource fhirClientResource, @Nullable String contentType, @Nonnull String fhirResourceType, @Nonnull String fhirResourceId, @Nonnull String fhirResource, @Nonnull String authorization) {
         final FhirVersion fhirVersion = fhirClientResource.getFhirClient().getFhirVersion();
         final FhirContext fhirContext = fhirContexts.get(fhirVersion);
         if (fhirContext == null) {
@@ -152,7 +157,7 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
         final ProcessedItemInfo processedItemInfo = ProcessedFhirItemInfoUtils.create(parsedFhirResource);
         FhirResource _fhirResource = new FhirResource(fhirClientResource.getGroupId(), processedItemInfo, false);
-        fhirResourceExpressService.receive(_fhirResource, authorization);
+        return fhirResourceExpressService.receive(_fhirResource, authorization);
     }
 
     @Override

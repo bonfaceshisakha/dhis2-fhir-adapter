@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.dhis2.fhir.adapter.auth.Authorization;
+import org.dhis2.fhir.adapter.fhir.repository.FhirRepositoryOperationOutcome;
 
 /**
  *
@@ -92,16 +93,16 @@ public class FhirResourceExpressServiceImpl implements FhirResourceExpressServic
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @Override
-    public void receive(@Nonnull FhirResource fhirResource, @Nonnull String authorization) {
+    public  FhirRepositoryOperationOutcome receive(@Nonnull FhirResource fhirResource, @Nonnull String authorization) {
         SecurityContextHolder.getContext().setAuthentication(new AdapterSystemAuthenticationToken());
         try {
-            receiveAuthenticated(fhirResource, authorization);
+            return receiveAuthenticated(fhirResource, authorization);
         } finally {
             SecurityContextHolder.clearContext();
         }
     }
 
-    protected void receiveAuthenticated(@Nonnull FhirResource fhirResource, @Nonnull String authorization) {
+    protected  FhirRepositoryOperationOutcome receiveAuthenticated(@Nonnull FhirResource fhirResource, @Nonnull String authorization) {
         final long currentProcessedCount = processedCount.incrementAndGet();
 
         final FhirClientResource fhirClientResource
@@ -109,12 +110,15 @@ public class FhirResourceExpressServiceImpl implements FhirResourceExpressServic
         if (fhirClientResource == null) {
             logger.warn("FHIR client resource {} is no longer available. Skipping processing of updated FHIR resource {}.",
                     fhirResource.getFhirClientResourceId(), fhirResource.getId());
-            return;
+            return null;
         }
 
         final FhirClient fhirClient = fhirClientResource.getFhirClient();
         final SubscriptionFhirResource subscriptionFhirResource = subscriptionFhirResourceRepository.findResource(fhirClientResource, fhirResource.getIdPart()).orElse(null);
         final Optional<IBaseResource> resource;
+        FhirRepositoryOperationOutcome fhirRepositoryOperationOutcome=null;
+        
+        
         if (fhirResource.isPersistedDataItem()) {
             resource = getParsedFhirResource(fhirResource, fhirClientResource, subscriptionFhirResource);
         } else {
@@ -136,14 +140,14 @@ public class FhirResourceExpressServiceImpl implements FhirResourceExpressServic
 
                         //Set bearer or basic authentication here
                         authorizationContext.setAuthorization(createAuthorization(authorization));
-
-                        fhirRepository.save(fhirClientResource, resource.get(), null);
+                        
+                        fhirRepositoryOperationOutcome=fhirRepository.save(fhirClientResource, resource.get(), null);
                     
                     } catch (DhisConflictException e) {
-                        logger.warn("Processing of data of FHIR resource caused a conflict on DHIS2. Skipping FHIR resource because of the occurred conflict: {}", e.getMessage());
+                        logger.warn("Processing of data of FHIR resource caused a conflict on DHIS2. Unresolvable conflict: {}", e.getMessage());
                         throw e;
                     } catch (TransformerDataException | TransformerMappingException e) {
-                        logger.warn("Processing of data of FHIR resource caused a transformation error. Retrying processing later because of resolvable issue: {}", e.getMessage());
+                        logger.warn("Processing of data of FHIR resource caused a transformation error. Unresolvable Issue: {}", e.getMessage());
                         throw e;
                     }
                     logger.info("Processed FHIR resource {} for FHIR client resource {}.",
@@ -158,6 +162,8 @@ public class FhirResourceExpressServiceImpl implements FhirResourceExpressServic
             logger.info("FHIR resource {}/{} for FHIR client resource {} is no longer available. Skipping processing of updated FHIR resource.",
                     fhirClientResource.getFhirResourceType().getResourceTypeName(), fhirResource.getId(), fhirClientResource.getId());
         }
+        
+        return fhirRepositoryOperationOutcome;
     }
 
     @Nonnull

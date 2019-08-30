@@ -1,5 +1,6 @@
 package org.dhis2.fhir.adapter.fhir.express;
 
+import org.dhis2.fhir.adapter.fhir.repository.FhirRepositoryOperationOutcome;
 import org.dhis2.fhir.adapter.fhir.repository.FhirResource;
 
 /**
@@ -8,6 +9,6 @@ import org.dhis2.fhir.adapter.fhir.repository.FhirResource;
  */
 public interface FhirResourceExpressService {
 
-    public void receive(FhirResource fhirResource, String authorization);
+    public  FhirRepositoryOperationOutcome receive(FhirResource fhirResource, String authorization);
 
 }
