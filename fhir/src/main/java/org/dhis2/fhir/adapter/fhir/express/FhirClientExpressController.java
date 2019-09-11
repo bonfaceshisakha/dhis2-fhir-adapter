@@ -111,6 +111,12 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
     }
 
+    //This method can be invoked to check whether the adapter is running
+    @RequestMapping(path = "/runningAdapter", method = RequestMethod.GET)
+    public ResponseEntity<byte[]> getAdapterRunning() {
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
     @Nonnull
     protected FhirClientResource lookupFhirClientResource(@Nonnull UUID fhirClientId, @Nonnull FhirResourceType fhirResourceType, @Nullable String authorization) {
         final FhirClientResource fhirClientResource = getResourceRepository().findFirstCached(fhirClientId, fhirResourceType)
@@ -173,6 +179,7 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
         //Authenticate against Dhis2 Server
         if (!checkAuthorization(authorization)) {
+            logger.warn("Authorization: " + authorization + " has failed.");
             throw new RestUnauthorizedException("Authentication has failed.");
         }
     }
