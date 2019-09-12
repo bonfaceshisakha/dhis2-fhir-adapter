@@ -103,8 +103,7 @@ public class FhirClientExpressController extends AbstractFhirClientController {
             if (checkAuthorization(authorization)) {
                 return new ResponseEntity<>(HttpStatus.OK);
             } else {
-                logger.warn("Authorization: " + authorization + " has failed.");
-                return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+                return createBadRequestResponse("Authorization: " + authorization + " has failed.");
             }
         } catch (Exception ex) {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
