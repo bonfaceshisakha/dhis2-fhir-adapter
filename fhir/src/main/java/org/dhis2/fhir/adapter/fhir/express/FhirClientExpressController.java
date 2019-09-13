@@ -2,7 +2,6 @@ package org.dhis2.fhir.adapter.fhir.express;
 
 import ca.uhn.fhir.context.FhirContext;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
 import org.dhis2.fhir.adapter.fhir.client.*;
@@ -38,7 +37,6 @@ import org.dhis2.fhir.adapter.fhir.util.FhirParserException;
 import org.dhis2.fhir.adapter.fhir.util.FhirParserUtils;
 import org.dhis2.fhir.adapter.rest.RestUnauthorizedException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.springframework.http.HttpHeaders;
 
 /**
  *
@@ -88,9 +86,8 @@ public class FhirClientExpressController extends AbstractFhirClientController {
     @RequestMapping(path = "/{fhirClientId}/**/{resourceType}/{resourceId}", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<byte[]> receiveWithPayload(
             @PathVariable("fhirClientId") UUID fhirClientId, @PathVariable("resourceType") String resourceType, @PathVariable("resourceId") String resourceId,
-            @RequestHeader(value = "BasicToken", required = false) String basicToken, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken, @Nonnull HttpEntity<byte[]> requestEntity) {
+            @RequestHeader(value = "Authorization", required = false) String authorization, @Nonnull HttpEntity<byte[]> requestEntity) {
         final FhirResourceType fhirResourceType = FhirResourceType.getByResourceTypeName(resourceType);
-        String authorization = !ExpressUtility.isEmpty(myAdapterToken) ? "Bearer " +myAdapterToken : basicToken;
         if (fhirResourceType == null) {
             return createBadRequestResponse("Unknown resource type: " + resourceType);
         }
@@ -101,14 +98,12 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
     //This method can be invoked to check whether both the adapter and dhis are running
     @RequestMapping(path = "/authenticated", method = RequestMethod.GET)
-    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "BasicToken", required = false) String basicToken, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken) {
+    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "Authorization", required = true) String authorization) {
         try {
-            String authorization = !ExpressUtility.isEmpty(myAdapterToken) ? "Bearer " +myAdapterToken : basicToken;
             if (checkAuthorization(authorization)) {
                 return new ResponseEntity<>(HttpStatus.OK);
             } else {
-                logger.warn("Authorization: " + authorization + " has failed.");
-                return createUnauthorizedRequestResponse("Authorization: " + authorization + " has failed.");
+                return new ResponseEntity<>(HttpStatus.FORBIDDEN);
             }
         } catch (Exception ex) {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -209,12 +204,6 @@ public class FhirClientExpressController extends AbstractFhirClientController {
             return endpointConfig.getUrl() + "/api";
         }
         return endpointConfig.getUrl() + "/api/" + endpointConfig.getApiVersion();
-    }
-
-    protected ResponseEntity<byte[]> createUnauthorizedRequestResponse(@Nonnull String message) {
-        final HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-        return new ResponseEntity<>(message.getBytes(StandardCharsets.UTF_8), headers, HttpStatus.UNAUTHORIZED);
     }
 
 }
