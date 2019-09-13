@@ -88,9 +88,9 @@ public class FhirClientExpressController extends AbstractFhirClientController {
     @RequestMapping(path = "/{fhirClientId}/**/{resourceType}/{resourceId}", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<byte[]> receiveWithPayload(
             @PathVariable("fhirClientId") UUID fhirClientId, @PathVariable("resourceType") String resourceType, @PathVariable("resourceId") String resourceId,
-            @RequestHeader(value = "Authorization", required = false) String authorization, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken, @Nonnull HttpEntity<byte[]> requestEntity) {
+            @RequestHeader(value = "BasicToken", required = false) String basicToken, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken, @Nonnull HttpEntity<byte[]> requestEntity) {
         final FhirResourceType fhirResourceType = FhirResourceType.getByResourceTypeName(resourceType);
-        authorization = !ExpressUtility.isEmpty(myAdapterToken) ? myAdapterToken : authorization;
+        String authorization = !ExpressUtility.isEmpty(myAdapterToken) ? "Bearer " +myAdapterToken : basicToken;
         if (fhirResourceType == null) {
             return createBadRequestResponse("Unknown resource type: " + resourceType);
         }
@@ -101,9 +101,9 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
     //This method can be invoked to check whether both the adapter and dhis are running
     @RequestMapping(path = "/authenticated", method = RequestMethod.GET)
-    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "Authorization", required = false) String authorization, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken) {
+    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "BasicToken", required = false) String basicToken, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken) {
         try {
-            authorization = !ExpressUtility.isEmpty(myAdapterToken) ? myAdapterToken : authorization;
+            String authorization = !ExpressUtility.isEmpty(myAdapterToken) ? "Bearer " +myAdapterToken : basicToken;
             if (checkAuthorization(authorization)) {
                 return new ResponseEntity<>(HttpStatus.OK);
             } else {
