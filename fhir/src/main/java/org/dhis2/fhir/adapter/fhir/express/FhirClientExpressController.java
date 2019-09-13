@@ -2,6 +2,7 @@ package org.dhis2.fhir.adapter.fhir.express;
 
 import ca.uhn.fhir.context.FhirContext;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
 import org.dhis2.fhir.adapter.fhir.client.*;
@@ -37,6 +38,7 @@ import org.dhis2.fhir.adapter.fhir.util.FhirParserException;
 import org.dhis2.fhir.adapter.fhir.util.FhirParserUtils;
 import org.dhis2.fhir.adapter.rest.RestUnauthorizedException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.springframework.http.HttpHeaders;
 
 /**
  *
@@ -103,7 +105,7 @@ public class FhirClientExpressController extends AbstractFhirClientController {
             if (checkAuthorization(authorization)) {
                 return new ResponseEntity<>(HttpStatus.OK);
             } else {
-                return createBadRequestResponse("Authorization: " + authorization + " has failed.");
+                return createUnauthorizedRequestResponse("Authorization: " + authorization + " has failed.");
             }
         } catch (Exception ex) {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -204,6 +206,13 @@ public class FhirClientExpressController extends AbstractFhirClientController {
             return endpointConfig.getUrl() + "/api";
         }
         return endpointConfig.getUrl() + "/api/" + endpointConfig.getApiVersion();
+    }
+    
+     protected ResponseEntity<byte[]> createUnauthorizedRequestResponse( @Nonnull String message )
+    {
+        final HttpHeaders headers = new HttpHeaders();
+        headers.setContentType( MediaType.TEXT_PLAIN );
+        return new ResponseEntity<>( message.getBytes( StandardCharsets.UTF_8 ), headers, HttpStatus.UNAUTHORIZED );
     }
 
 }
