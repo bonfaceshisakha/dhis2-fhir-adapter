@@ -39,6 +39,7 @@ import org.dhis2.fhir.adapter.fhir.util.FhirParserUtils;
 import org.dhis2.fhir.adapter.rest.RestUnauthorizedException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
  *
@@ -112,6 +113,12 @@ public class FhirClientExpressController extends AbstractFhirClientController {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
+    }
+    
+    @RequestMapping(path = "/getAuthorization", method = RequestMethod.GET)
+    public String getAuthorization(@RequestHeader(value = "Authorization", required = true) String authorization) {
+        logger.info("Authorization: " + authorization);
+        return authorization;
     }
 
     //This method can be invoked to check whether the adapter is running
