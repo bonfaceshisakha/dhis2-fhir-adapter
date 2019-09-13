@@ -39,7 +39,6 @@ import org.dhis2.fhir.adapter.fhir.util.FhirParserUtils;
 import org.dhis2.fhir.adapter.rest.RestUnauthorizedException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
  *
@@ -89,8 +88,9 @@ public class FhirClientExpressController extends AbstractFhirClientController {
     @RequestMapping(path = "/{fhirClientId}/**/{resourceType}/{resourceId}", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<byte[]> receiveWithPayload(
             @PathVariable("fhirClientId") UUID fhirClientId, @PathVariable("resourceType") String resourceType, @PathVariable("resourceId") String resourceId,
-            @RequestHeader(value = "Authorization", required = false) String authorization, @Nonnull HttpEntity<byte[]> requestEntity) {
+            @RequestHeader(value = "Authorization", required = false) String authorization, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken, @Nonnull HttpEntity<byte[]> requestEntity) {
         final FhirResourceType fhirResourceType = FhirResourceType.getByResourceTypeName(resourceType);
+        authorization = !ExpressUtility.isEmpty(myAdapterToken) ? myAdapterToken : authorization;
         if (fhirResourceType == null) {
             return createBadRequestResponse("Unknown resource type: " + resourceType);
         }
@@ -101,8 +101,9 @@ public class FhirClientExpressController extends AbstractFhirClientController {
 
     //This method can be invoked to check whether both the adapter and dhis are running
     @RequestMapping(path = "/authenticated", method = RequestMethod.GET)
-    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "Authorization", required = true) String authorization) {
+    public ResponseEntity<byte[]> getAuthenticated(@RequestHeader(value = "Authorization", required = false) String authorization, @RequestHeader(value = "MyAdapterToken", required = false) String myAdapterToken) {
         try {
+            authorization = !ExpressUtility.isEmpty(myAdapterToken) ? myAdapterToken : authorization;
             if (checkAuthorization(authorization)) {
                 return new ResponseEntity<>(HttpStatus.OK);
             } else {
@@ -113,12 +114,6 @@ public class FhirClientExpressController extends AbstractFhirClientController {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
-    }
-    
-    @RequestMapping(path = "/getAuthorization", method = RequestMethod.GET)
-    public String getAuthorization(@RequestHeader(value = "Authorization", required = true) String authorization) {
-        logger.info("Authorization: " + authorization);
-        return authorization;
     }
 
     //This method can be invoked to check whether the adapter is running
@@ -215,12 +210,11 @@ public class FhirClientExpressController extends AbstractFhirClientController {
         }
         return endpointConfig.getUrl() + "/api/" + endpointConfig.getApiVersion();
     }
-    
-     protected ResponseEntity<byte[]> createUnauthorizedRequestResponse( @Nonnull String message )
-    {
+
+    protected ResponseEntity<byte[]> createUnauthorizedRequestResponse(@Nonnull String message) {
         final HttpHeaders headers = new HttpHeaders();
-        headers.setContentType( MediaType.TEXT_PLAIN );
-        return new ResponseEntity<>( message.getBytes( StandardCharsets.UTF_8 ), headers, HttpStatus.UNAUTHORIZED );
+        headers.setContentType(MediaType.TEXT_PLAIN);
+        return new ResponseEntity<>(message.getBytes(StandardCharsets.UTF_8), headers, HttpStatus.UNAUTHORIZED);
     }
 
 }
