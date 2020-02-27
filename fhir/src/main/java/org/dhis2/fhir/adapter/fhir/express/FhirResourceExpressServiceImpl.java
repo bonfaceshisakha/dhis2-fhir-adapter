@@ -132,6 +132,8 @@ public class FhirResourceExpressServiceImpl implements FhirResourceExpressServic
             if (storedItemService.contains(fhirClient, processedItemInfo.toIdString(Instant.now()))) {
                 logger.info("FHIR resource {} of FHIR client resource {} has already been stored.",
                         resource.get().getIdElement().toUnqualified(), fhirClientResource.getId());
+                //Unlike other asynchronous services, this must be treated as a successful outcome/operation 
+                fhirRepositoryOperationOutcome=new FhirRepositoryOperationOutcome(resource.get().getIdElement().getIdPart(), true);            
             } else {
                 try (final MDC.MDCCloseable c = MDC.putCloseable("fhirId", fhirClientResource.getId() + ":" + resource.get().getIdElement().toUnqualifiedVersionless())) {
                     logger.info("Processing FHIR resource {} of FHIR client resource {} (persisted={}, processed={}).",
