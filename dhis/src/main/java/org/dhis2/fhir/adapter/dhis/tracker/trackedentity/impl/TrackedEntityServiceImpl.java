@@ -128,6 +128,11 @@ public class TrackedEntityServiceImpl implements TrackedEntityService, LocalDhis
     protected static final String FIND_BY_ATTR_VALUE_URI = "/trackedEntityInstances.json?" +
         "trackedEntityType={typeId}&ouMode=ACCESSIBLE&filter={attrId}:EQ:{attrValue}&pageSize={maxResult}&" +
         "fields=" + TEI_FIELDS;
+    
+    //Added by Charles Chigoriwa (ITINordic)
+    protected static final String FIND_BY_ATTR_VALUE_URI_LIKE = "/trackedEntityInstances.json?" +
+        "trackedEntityType={typeId}&ouMode=ACCESSIBLE&filter={attrId}:LIKE:{attrValue}&pageSize={maxResult}&" +
+        "fields=" + TEI_FIELDS;
 
     protected static final int MAX_RESERVE_RETRIES = 10;
 
@@ -252,10 +257,22 @@ public class TrackedEntityServiceImpl implements TrackedEntityService, LocalDhis
     @Nonnull
     protected Collection<TrackedEntityInstance> _findByAttrValueRefreshed( @Nonnull String typeId, @Nonnull String attributeId, @Nonnull String value, int maxResult )
     {
+        //Added by Charles Chigoriwa
+        boolean colonSupported = true;
+                
         // filtering by values with a colon inside is not supported by DHIS2 Web API
         if ( value.contains( ":" ) )
         {
-            return Collections.emptyList();
+            if( ! colonSupported )
+            {
+                return Collections.emptyList();
+            }
+            else
+            {
+                value = value.substring( value.lastIndexOf(":") + 1 );
+                return Objects.requireNonNull( restTemplate.getForEntity( FIND_BY_ATTR_VALUE_URI_LIKE, TrackedEntityInstances.class, typeId, attributeId, value, maxResult )
+            .getBody() ).getTrackedEntityInstances();
+            }
         }
 
         return Objects.requireNonNull( restTemplate.getForEntity( FIND_BY_ATTR_VALUE_URI, TrackedEntityInstances.class, typeId, attributeId, value, maxResult )
