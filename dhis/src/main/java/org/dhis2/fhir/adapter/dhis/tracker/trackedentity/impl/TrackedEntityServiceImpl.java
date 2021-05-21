@@ -269,6 +269,7 @@ public class TrackedEntityServiceImpl implements TrackedEntityService, LocalDhis
             }
             else
             {
+                logger.info("Resolving an identifier with a colon");
                 value = value.substring( value.lastIndexOf(":") + 1 );
                 return Objects.requireNonNull( restTemplate.getForEntity( FIND_BY_ATTR_VALUE_URI_LIKE, TrackedEntityInstances.class, typeId, attributeId, value, maxResult )
             .getBody() ).getTrackedEntityInstances();
