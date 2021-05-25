@@ -45,6 +45,7 @@ import javax.annotation.Nonnull;
 import java.net.URI;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.dhis2.fhir.adapter.fhir.express.GeneralInterceptor;
 
 /**
  * Utility class to create FHIR client with its required configuration. The
@@ -52,6 +53,7 @@ import java.util.regex.Pattern;
  * Capability statements will never be refreshed once they have been fetched.
  *
  * @author volsch
+ * @author Charles Chigoriwa (ITINordic)
  */
 public abstract class FhirClientUtils
 {
@@ -79,6 +81,13 @@ public abstract class FhirClientUtils
             // use FHIR specification compliant format content type
             client.registerInterceptor( jsonFormatClientInterceptor );
         }
+        
+        
+        //Added by Charles Chigoriwa
+        client.registerInterceptor(new GeneralInterceptor());
+        
+        
+         
 
         return client;
     }
