@@ -972,7 +972,7 @@ public class FhirToProgramStageTransformer extends AbstractFhirToDhisTransformer
         if( enrollment == null )
         {
             logger.info("Forcing retrieval of enrollment");
-            enrollment=enrollmentService.findLatestActiveRefreshed(program.getId(), trackedEntityInstance.getId());
+            enrollment = enrollmentService.findLatestActiveRefreshed(program.getId(), trackedEntityInstance.getId());
         }
 
         List<Event> events = Collections.emptyList();
