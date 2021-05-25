@@ -967,6 +967,13 @@ public class FhirToProgramStageTransformer extends AbstractFhirToDhisTransformer
         {
             enrollment = enrollmentService.findLatestActive( program.getId(), Objects.requireNonNull( trackedEntityInstance.getId() ), trackedEntityInstance.isLocal() ).orElse( null );
         }
+        
+        //The following if was added by Charles Chigoriwa: Experimental
+        if( enrollment == null )
+        {
+            logger.info("Forcing retrieval of enrollment");
+            enrollment=enrollmentService.findLatestActiveRefreshed(program.getId(), trackedEntityInstance.getId());
+        }
 
         List<Event> events = Collections.emptyList();
 

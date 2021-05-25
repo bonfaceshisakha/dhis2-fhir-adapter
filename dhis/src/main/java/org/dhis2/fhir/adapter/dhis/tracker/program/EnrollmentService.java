@@ -60,4 +60,8 @@ public interface EnrollmentService extends DhisService<Enrollment>
 
     @Nonnull
     DhisResourceResult<Enrollment> find( @Nonnull UriFilterApplier uriFilterApplier, int from, int max );
+    
+    
+    //Added by Charles Chigoriwa:: Experimental
+    public Enrollment findLatestActiveRefreshed( @Nonnull String programId, @Nonnull String trackedEntityInstanceId );
 }
