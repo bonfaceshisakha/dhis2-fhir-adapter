@@ -173,7 +173,7 @@ public class EnrollmentServiceImpl implements EnrollmentService, LocalDhisReposi
             e -> programId.equals( e.getProgramId() ) && e.getStatus() == EnrollmentStatus.ACTIVE,
             () -> createCollection( _findLatestActiveRefreshed( programId, trackedEntityInstanceId ) ),
             localOnly, "findLatestActiveRefreshed", programId, trackedEntityInstanceId );
-         
+
         return enrollments.stream().min( Comparator.comparing( Enrollment::getLastUpdated, Comparator.nullsLast( Comparator.reverseOrder() ) ) );
     }
 
@@ -185,16 +185,6 @@ public class EnrollmentServiceImpl implements EnrollmentService, LocalDhisReposi
 
     @Nullable
     protected Enrollment _findLatestActiveRefreshed( @Nonnull String programId, @Nonnull String trackedEntityInstanceId )
-    {
-        final ResponseEntity<DhisEnrollments> result = restTemplate.getForEntity(
-            LATEST_ACTIVE_URI, DhisEnrollments.class, programId, trackedEntityInstanceId );
-
-        return Objects.requireNonNull( result.getBody() ).getEnrollments().stream().findFirst().orElse( null );
-    }
-    
-    //Added by Charles Chigoriwa (Experimental)
-    @Nullable
-    public Enrollment findLatestActiveRefreshed( @Nonnull String programId, @Nonnull String trackedEntityInstanceId )
     {
         final ResponseEntity<DhisEnrollments> result = restTemplate.getForEntity(
             LATEST_ACTIVE_URI, DhisEnrollments.class, programId, trackedEntityInstanceId );
