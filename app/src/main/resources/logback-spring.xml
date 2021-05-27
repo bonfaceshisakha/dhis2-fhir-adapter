@@ -37,9 +37,6 @@
   <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
   <property name="LOG_FILE" value="${LOG_FILE:-${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}/}dhis2-fhir-adapter.log}" />
   <include resource="org/springframework/boot/logging/logback/file-appender.xml" />
-  
-  <!-- Added by Charles Chigoriwa -->
-  <logger name="org.springframework.web" level="DEBUG" />
 
   <logger name="org.hibernate" level="warn" />
   <logger name="org.hibernate.cfg.AnnotationBinder" level="error" />
