@@ -28,7 +28,6 @@ public class GeneralInterceptor implements IClientInterceptor {
 
     @Override
     public void interceptResponse(IHttpResponse theResponse) throws IOException {
-        logger.info("GeneralInterceptor.interceptResponse(IHttpResponse theResponse)");
         InputStream respEntity = null;
         try {
             if (theResponse instanceof ApacheHttpResponse) {
@@ -37,7 +36,7 @@ public class GeneralInterceptor implements IClientInterceptor {
                 String mimeType = theResponse.getMimeType();
                 ContentType contentType = null;
                 if (mimeType != null) {
-                    contentType = ContentType.getByMimeType(mimeType);
+                    contentType = ContentType.create(mimeType);
                 }
 
                 if (respEntity != null) {
@@ -51,8 +50,6 @@ public class GeneralInterceptor implements IClientInterceptor {
                     if (newBody.contains("&nbsp;")) {
                         newBody = newBody.replaceAll("&nbsp;", "");
                     }
-
-                    contentType = contentType == null ? ContentType.APPLICATION_JSON : contentType;
 
                     ApacheHttpResponse apacheHttpResponse = (ApacheHttpResponse) theResponse;
                     apacheHttpResponse.getResponse().setEntity(new StringEntity(newBody, contentType));
